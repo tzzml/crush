@@ -53,11 +53,6 @@ type CloseProjectResponse struct {
 	Status      string `json:"status"`
 }
 
-type ConnectProjectResponse struct {
-	IsOpen      bool   `json:"is_open"`
-	ProjectPath string `json:"project_path"`
-}
-
 // Sessions API
 
 type SessionsResponse struct {

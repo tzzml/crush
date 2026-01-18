@@ -7,13 +7,17 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/crush/api/models"
 	"github.com/charmbracelet/crush/internal/pubsub"
 	"github.com/charmbracelet/crush/internal/app"
+	"github.com/charmbracelet/crush/internal/message"
+	"github.com/charmbracelet/crush/internal/session"
 )
 
 // HandleSSE 处理 Server-Sent Events 请求
@@ -97,20 +101,24 @@ func (h *Handlers) handleSSEEvent(w http.ResponseWriter, flusher http.Flusher, e
 	case pubsub.Event[app.LSPEvent]:
 		eventType = string(e.Type)
 		eventData = e.Payload
-	case pubsub.Event[any]:
+	case pubsub.Event[message.Message]:
+		// 消息事件：转换为 API 响应格式
 		eventType = string(e.Type)
-		eventData = e.Payload
+		eventData = models.MessageToResponse(e.Payload)
+	case pubsub.Event[session.Session]:
+		// 会话事件：转换为 API 响应格式
+		eventType = string(e.Type)
+		eventData = models.SessionToResponse(e.Payload)
 	default:
-		// 其他事件类型
-		eventType = "unknown"
-		eventData = map[string]string{"type": fmt.Sprintf("%T", event)}
+		// 使用反射来识别事件类型
+		eventType, eventData = h.extractEventData(event)
 	}
 
 	// 序列化事件数据
 	data, err := json.Marshal(eventData)
 	if err != nil {
 		// 如果序列化失败，发送简单的事件
-		fmt.Fprintf(w, "event: %s\ndata: {\"error\": \"failed to serialize event\"}\n\n", eventType)
+		fmt.Fprintf(w, "event: %s\ndata: {\"error\": \"failed to serialize event: %s\"}\n\n", eventType, err.Error())
 		flusher.Flush()
 		return nil
 	}
@@ -120,6 +128,56 @@ func (h *Handlers) handleSSEEvent(w http.ResponseWriter, flusher http.Flusher, e
 	flusher.Flush()
 
 	return nil
+}
+
+// extractEventData 使用反射提取事件数据
+func (h *Handlers) extractEventData(event tea.Msg) (string, interface{}) {
+	v := reflect.ValueOf(event)
+	if !v.IsValid() || v.Kind() != reflect.Struct {
+		return "unknown", map[string]string{"type": fmt.Sprintf("%T", event)}
+	}
+
+	// 检查是否是 pubsub.Event 类型
+	eventTypeField := v.FieldByName("Type")
+	payloadField := v.FieldByName("Payload")
+
+	if !eventTypeField.IsValid() || !payloadField.IsValid() {
+		return "unknown", map[string]string{"type": fmt.Sprintf("%T", event)}
+	}
+
+	// 获取事件类型
+	eventType := ""
+	if eventTypeField.Kind() == reflect.String {
+		eventType = eventTypeField.String()
+	} else {
+		eventType = "unknown"
+	}
+
+	// 获取 payload
+	payload := payloadField.Interface()
+
+	// 尝试识别 payload 类型并转换
+	payloadType := reflect.TypeOf(payload)
+	if payloadType == nil {
+		return eventType, payload
+	}
+
+	// 检查是否是 Message 类型
+	if payloadType.Name() == "Message" && payloadType.PkgPath() == "github.com/charmbracelet/crush/internal/message" {
+		if msg, ok := payload.(message.Message); ok {
+			return eventType, models.MessageToResponse(msg)
+		}
+	}
+
+	// 检查是否是 Session 类型
+	if payloadType.Name() == "Session" && payloadType.PkgPath() == "github.com/charmbracelet/crush/internal/session" {
+		if sess, ok := payload.(session.Session); ok {
+			return eventType, models.SessionToResponse(sess)
+		}
+	}
+
+	// 其他类型，直接返回 payload
+	return eventType, payload
 }
 
 // createEventChannelForProject 为指定项目的 app 实例创建事件通道

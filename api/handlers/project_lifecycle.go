@@ -18,10 +18,6 @@ func (h *Handlers) HandleOpenProject(w http.ResponseWriter, r *http.Request) {
 
 	err = h.Open(r.Context(), projectPath)
 	if err != nil {
-		if strings.Contains(err.Error(), "already open") {
-			WriteError(w, "APP_ALREADY_OPEN", err.Error(), http.StatusConflict)
-			return
-		}
 		if strings.Contains(err.Error(), "project not found") {
 			WriteError(w, "PROJECT_NOT_FOUND", err.Error(), http.StatusNotFound)
 			return
@@ -48,10 +44,6 @@ func (h *Handlers) HandleCloseProject(w http.ResponseWriter, r *http.Request) {
 
 	err = h.Close(r.Context(), projectPath)
 	if err != nil {
-		if strings.Contains(err.Error(), "not open") {
-			WriteError(w, "APP_NOT_OPEN", err.Error(), http.StatusNotFound)
-			return
-		}
 		WriteError(w, "INTERNAL_ERROR", "Failed to close project: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -64,32 +56,9 @@ func (h *Handlers) HandleCloseProject(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, response)
 }
 
-// HandleConnectProject 处理检查项目连接状态的请求
-func (h *Handlers) HandleConnectProject(w http.ResponseWriter, r *http.Request) {
-	projectPath, err := extractProjectPathFromLifecycle(r)
-	if err != nil {
-		WriteError(w, "INVALID_REQUEST", "Failed to extract project path: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	status, err := h.Connect(r.Context(), projectPath)
-	if err != nil {
-		WriteError(w, "INTERNAL_ERROR", "Failed to check project status: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	response := models.ConnectProjectResponse{
-		IsOpen:      status.IsOpen,
-		ProjectPath: status.ProjectPath,
-	}
-
-	WriteJSON(w, http.StatusOK, response)
-}
-
 // extractProjectPathFromLifecycle 从生命周期 API URL 中提取项目路径
 // URL 格式: /api/v1/projects/{project_path}/open
 //           /api/v1/projects/{project_path}/close
-//           /api/v1/projects/{project_path}/connect
 func extractProjectPathFromLifecycle(r *http.Request) (string, error) {
 	path := r.URL.Path
 	prefix := "/api/v1/projects/"
@@ -100,14 +69,12 @@ func extractProjectPathFromLifecycle(r *http.Request) (string, error) {
 	// 移除前缀
 	rest := path[len(prefix):]
 
-	// 查找生命周期操作的后缀（/open, /close, /connect）
+	// 查找生命周期操作的后缀（/open, /close）
 	var suffix string
 	if strings.HasSuffix(rest, "/open") {
 		suffix = "/open"
 	} else if strings.HasSuffix(rest, "/close") {
 		suffix = "/close"
-	} else if strings.HasSuffix(rest, "/connect") {
-		suffix = "/connect"
 	} else {
 		return "", http.ErrMissingFile
 	}

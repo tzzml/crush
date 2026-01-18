@@ -23,20 +23,15 @@ var globalAppManager = &AppManager{
 	apps: make(map[string]*app.App),
 }
 
-// AppStatus 表示 app 实例的状态
-type AppStatus struct {
-	IsOpen   bool   `json:"is_open"`
-	ProjectPath string `json:"project_path"`
-}
-
-// Open 创建并启动项目的 app 实例
+// Open 创建并启动项目的 app 实例（幂等性：如果已打开则直接返回成功）
 func (h *Handlers) Open(ctx context.Context, projectPath string) error {
 	globalAppManager.mu.Lock()
 	defer globalAppManager.mu.Unlock()
 
-	// 检查是否已经打开
+	// 检查是否已经打开（幂等性：如果已打开则直接返回成功）
 	if _, ok := globalAppManager.apps[projectPath]; ok {
-		return fmt.Errorf("app instance already open for project: %s", projectPath)
+		slog.Info("Project app instance already open, returning success", "project", projectPath)
+		return nil
 	}
 
 	// 获取项目信息
@@ -87,14 +82,16 @@ func (h *Handlers) Open(ctx context.Context, projectPath string) error {
 	return nil
 }
 
-// Close 关闭并清理项目的 app 实例
+// Close 关闭并清理项目的 app 实例（幂等性：如果已关闭则直接返回成功）
 func (h *Handlers) Close(ctx context.Context, projectPath string) error {
 	globalAppManager.mu.Lock()
 	defer globalAppManager.mu.Unlock()
 
 	appInstance, ok := globalAppManager.apps[projectPath]
 	if !ok {
-		return fmt.Errorf("app instance not open for project: %s", projectPath)
+		// 幂等性：如果已经关闭，直接返回成功
+		slog.Info("Project app instance already closed, returning success", "project", projectPath)
+		return nil
 	}
 
 	// 关闭 app 实例
@@ -103,18 +100,6 @@ func (h *Handlers) Close(ctx context.Context, projectPath string) error {
 	slog.Info("Closed project app instance", "project", projectPath)
 
 	return nil
-}
-
-// Connect 检查项目 app 实例是否存在并返回状态
-func (h *Handlers) Connect(ctx context.Context, projectPath string) (*AppStatus, error) {
-	globalAppManager.mu.RLock()
-	defer globalAppManager.mu.RUnlock()
-
-	_, isOpen := globalAppManager.apps[projectPath]
-	return &AppStatus{
-		IsOpen:      isOpen,
-		ProjectPath: projectPath,
-	}, nil
 }
 
 // GetAppForProject 获取已打开的 app 实例（如果未打开则返回错误）

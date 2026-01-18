@@ -83,13 +83,6 @@ func NewServer(host string, port int) *Server {
 				return
 			}
 		}
-		if strings.HasPrefix(path, "/api/v1/projects/") && strings.HasSuffix(path, "/connect") {
-			// /api/v1/projects/{project_path}/connect
-			if r.Method == "GET" {
-				h.HandleConnectProject(w, r)
-				return
-			}
-		}
 
 		// Sessions API - 需要解析 project_path
 		if strings.HasPrefix(path, "/api/v1/projects/") && strings.HasSuffix(path, "/sessions") {

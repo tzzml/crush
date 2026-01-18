@@ -140,9 +140,11 @@ Content-Type: application/json
 ```
 
 **错误码**：
-- `APP_ALREADY_OPEN`: 项目已经打开
 - `PROJECT_NOT_FOUND`: 项目不存在
 - `INTERNAL_ERROR`: 打开失败（如配置加载失败、数据库连接失败等）
+
+**说明**：
+- 此操作是幂等的：如果项目已经打开，再次调用会直接返回成功，不会报错
 
 #### 1.4 关闭项目（清理 app 实例）
 
@@ -166,31 +168,10 @@ Content-Type: application/json
 ```
 
 **错误码**：
-- `APP_NOT_OPEN`: 项目未打开
 - `INTERNAL_ERROR`: 关闭失败
 
-#### 1.5 检查项目连接状态
-
-检查项目的 app 实例是否已打开。
-
-```http
-GET /api/v1/projects/{project_path}/connect
-```
-
-**路径参数**：
-- `project_path`: 项目的路径（需要 URL 编码）
-
-**响应示例**：
-
-```json
-{
-  "is_open": true,
-  "project_path": "/path/to/project"
-}
-```
-
 **说明**：
-- `is_open`: `true` 表示项目已打开，`false` 表示未打开
+- 此操作是幂等的：如果项目已经关闭，再次调用会直接返回成功，不会报错
 
 ### 2. Sessions（会话管理）
 
@@ -940,8 +921,9 @@ for chunk in send_message_stream(session["id"], "Hello!"):
 
 - `PROJECT_NOT_FOUND`: 项目不存在
 - `APP_NOT_OPENED`: 项目的 app 实例未打开（需要先调用 open API）
-- `APP_ALREADY_OPEN`: 项目已经打开（重复调用 open）
-- `APP_NOT_OPEN`: 项目未打开（调用 close 时）
+
+**注意**：
+- `open` 和 `close` 操作是幂等的：重复调用不会报错，会直接返回成功
 - `SESSION_NOT_FOUND`: 会话不存在
 - `MESSAGE_NOT_FOUND`: 消息不存在
 - `INVALID_PROJECT_PATH`: 项目路径无效
