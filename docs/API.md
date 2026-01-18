@@ -118,7 +118,83 @@ Content-Type: application/json
 - 如果项目已存在，会更新 `last_accessed` 时间
 - 如果 `data_dir` 未提供，会根据项目路径自动生成
 
+#### 1.3 打开项目（创建 app 实例）
+
+在使用项目的会话和消息功能之前，必须先打开项目以创建 app 实例。
+
+```http
+POST /api/v1/projects/{project_path}/open
+Content-Type: application/json
+```
+
+**路径参数**：
+- `project_path`: 项目的路径（需要 URL 编码）
+
+**响应示例**：
+
+```json
+{
+  "project_path": "/path/to/project",
+  "status": "opened"
+}
+```
+
+**错误码**：
+- `APP_ALREADY_OPEN`: 项目已经打开
+- `PROJECT_NOT_FOUND`: 项目不存在
+- `INTERNAL_ERROR`: 打开失败（如配置加载失败、数据库连接失败等）
+
+#### 1.4 关闭项目（清理 app 实例）
+
+关闭项目会清理 app 实例并释放相关资源。
+
+```http
+POST /api/v1/projects/{project_path}/close
+Content-Type: application/json
+```
+
+**路径参数**：
+- `project_path`: 项目的路径（需要 URL 编码）
+
+**响应示例**：
+
+```json
+{
+  "project_path": "/path/to/project",
+  "status": "closed"
+}
+```
+
+**错误码**：
+- `APP_NOT_OPEN`: 项目未打开
+- `INTERNAL_ERROR`: 关闭失败
+
+#### 1.5 检查项目连接状态
+
+检查项目的 app 实例是否已打开。
+
+```http
+GET /api/v1/projects/{project_path}/connect
+```
+
+**路径参数**：
+- `project_path`: 项目的路径（需要 URL 编码）
+
+**响应示例**：
+
+```json
+{
+  "is_open": true,
+  "project_path": "/path/to/project"
+}
+```
+
+**说明**：
+- `is_open`: `true` 表示项目已打开，`false` 表示未打开
+
 ### 2. Sessions（会话管理）
+
+**重要**：在使用会话和消息 API 之前，必须先调用 `POST /api/v1/projects/{project_path}/open` 打开项目。
 
 #### 2.1 获取项目下的所有会话
 
@@ -434,6 +510,86 @@ GET /api/v1/projects/{project_path}/messages/{message_id}
 }
 ```
 
+### 4. Events（实时事件订阅）
+
+#### 4.1 订阅项目实时事件
+
+订阅指定项目的实时事件，包括会话和消息的创建、更新、删除等。
+
+```http
+GET /api/v1/projects/{project_path}/events
+Accept: text/event-stream
+```
+
+**路径参数**：
+- `project_path`: 项目的路径（需要 URL 编码）
+
+**前置条件**：
+- 项目必须已通过 `POST /api/v1/projects/{project_path}/open` 打开
+
+**响应**：使用 Server-Sent Events (SSE) 格式
+
+```
+Content-Type: text/event-stream
+Cache-Control: no-cache
+Connection: keep-alive
+
+event: connected
+data: {"status": "connected"}
+
+event: created
+data: {"type": "created", "payload": {"id": "session-uuid-1", "title": "New Session", ...}}
+
+event: updated
+data: {"type": "updated", "payload": {"id": "message-uuid-1", "content": "Hello", ...}}
+
+event: deleted
+data: {"type": "deleted", "payload": {"id": "session-uuid-1", ...}}
+```
+
+**SSE 事件类型**：
+- `connected`: 连接建立确认
+- `created`: 资源创建事件（会话、消息等）
+- `updated`: 资源更新事件（消息内容更新、会话状态变化等）
+- `deleted`: 资源删除事件
+- `heartbeat`: 心跳事件（每30秒发送一次，保持连接）
+
+**事件数据格式**：
+- 所有事件数据都是 JSON 格式
+- `payload` 字段包含具体的事件数据（会话或消息对象）
+
+**错误处理**：
+- 如果项目未打开，返回 `APP_NOT_OPENED` 错误
+- 如果项目不存在，返回 `PROJECT_NOT_FOUND` 错误
+
+**说明**：
+- SSE 连接会持续保持，直到客户端断开或项目被关闭
+- 只接收指定项目的事件，不会收到其他项目的事件
+- 建议客户端实现重连机制以处理网络中断
+
+**路径参数**：
+- `project_path`: 项目的路径（需要 URL 编码）
+- `message_id`: 消息的唯一标识符
+
+**响应示例**：
+
+```json
+{
+  "message": {
+    "id": "message-uuid-1",
+    "session_id": "session-uuid-1",
+    "role": "user",
+    "content": "Explain the use of context in Go",
+    "model": null,
+    "provider": null,
+    "is_summary_message": false,
+    "created_at": 1705312200000,
+    "updated_at": 1705312200000,
+    "finished_at": 1705312200000
+  }
+}
+```
+
 ## 使用示例
 
 ### 完整工作流示例
@@ -454,7 +610,23 @@ curl -X POST http://localhost:8080/api/v1/projects \
   }'
 ```
 
-#### 3. 创建会话
+#### 3. 打开项目
+
+```bash
+curl -X POST "http://localhost:8080/api/v1/projects/%2Fpath%2Fto%2Fmy%2Fproject/open" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+响应：
+```json
+{
+  "project_path": "/path/to/my/project",
+  "status": "opened"
+}
+```
+
+#### 4. 创建会话
 
 ```bash
 curl -X POST "http://localhost:8080/api/v1/projects/%2Fpath%2Fto%2Fmy%2Fproject/sessions" \
@@ -475,7 +647,7 @@ curl -X POST "http://localhost:8080/api/v1/projects/%2Fpath%2Fto%2Fmy%2Fproject/
 }
 ```
 
-#### 4. 发送消息（同步）
+#### 5. 发送消息（同步）
 
 ```bash
 curl -X POST "http://localhost:8080/api/v1/projects/my-project/sessions/abc-123-def/messages" \
@@ -486,7 +658,7 @@ curl -X POST "http://localhost:8080/api/v1/projects/my-project/sessions/abc-123-
   }'
 ```
 
-#### 5. 发送消息（流式）
+#### 6. 发送消息（流式）
 
 ```bash
 curl -X POST "http://localhost:8080/api/v1/projects/my-project/sessions/abc-123-def/messages" \
@@ -498,16 +670,90 @@ curl -X POST "http://localhost:8080/api/v1/projects/my-project/sessions/abc-123-
   --no-buffer
 ```
 
-#### 6. 获取消息历史
+#### 7. 获取消息历史
 
 ```bash
 curl "http://localhost:8080/api/v1/projects/my-project/sessions/abc-123-def/messages"
 ```
 
-#### 7. 获取所有会话
+#### 8. 获取所有会话
 
 ```bash
 curl "http://localhost:8080/api/v1/projects/%2Fpath%2Fto%2Fmy%2Fproject/sessions"
+```
+
+#### 9. 订阅实时事件（SSE）
+
+```bash
+curl -N "http://localhost:8080/api/v1/projects/%2Fpath%2Fto%2Fmy%2Fproject/events" \
+  -H "Accept: text/event-stream"
+```
+
+响应示例：
+```
+event: connected
+data: {"status": "connected"}
+
+event: created
+data: {"type": "created", "payload": {"id": "session-123", "title": "New Session"}}
+
+event: updated
+data: {"type": "updated", "payload": {"id": "message-456", "content": "Hello"}}
+```
+
+#### 10. 关闭项目（可选）
+
+```bash
+curl -X POST "http://localhost:8080/api/v1/projects/%2Fpath%2Fto%2Fmy%2Fproject/close" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+响应：
+```json
+{
+  "project_path": "/path/to/my/project",
+  "status": "closed"
+}
+```
+
+```bash
+curl "http://localhost:8080/api/v1/projects/%2Fpath%2Fto%2Fmy%2Fproject/sessions"
+```
+
+#### 9. 订阅实时事件（SSE）
+
+```bash
+curl -N "http://localhost:8080/api/v1/projects/%2Fpath%2Fto%2Fmy%2Fproject/events" \
+  -H "Accept: text/event-stream"
+```
+
+响应示例：
+```
+event: connected
+data: {"status": "connected"}
+
+event: created
+data: {"type": "created", "payload": {"id": "session-123", "title": "New Session"}}
+
+event: updated
+data: {"type": "updated", "payload": {"id": "message-456", "content": "Hello"}}
+```
+
+#### 10. 关闭项目（可选）
+
+```bash
+curl -X POST "http://localhost:8080/api/v1/projects/%2Fpath%2Fto%2Fmy%2Fproject/close" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+响应：
+```json
+{
+  "project_path": "/path/to/my/project",
+  "status": "closed"
+}
 ```
 
 ### JavaScript/TypeScript 示例
@@ -563,10 +809,45 @@ const sendMessageStream = async (
   }
 };
 
+// 订阅实时事件
+const subscribeEvents = async (projectPath: string, onEvent: (event: any) => void) => {
+  const response = await fetch(
+    `http://localhost:8080/api/v1/projects/${encodeURIComponent(projectPath)}/events`,
+    {
+      headers: { 'Accept': 'text/event-stream' },
+    }
+  );
+
+  const reader = response.body?.getReader();
+  const decoder = new TextDecoder();
+
+  while (true) {
+    const { done, value } = await reader!.read();
+    if (done) break;
+
+    const chunk = decoder.decode(value);
+    const lines = chunk.split('\n\n');
+
+    for (const line of lines) {
+      if (line.startsWith('event: ')) {
+        const eventType = line.slice(7);
+      } else if (line.startsWith('data: ')) {
+        const data = JSON.parse(line.slice(6));
+        onEvent({ type: eventType, data });
+      }
+    }
+  }
+};
+
 // 使用示例
 const session = await createSession('/path/to/project', 'My Session');
 await sendMessageStream(session.id, 'Hello!', (chunk) => {
   process.stdout.write(chunk);
+});
+
+// 订阅事件
+subscribeEvents('/path/to/project', (event) => {
+  console.log('收到事件:', event);
 });
 ```
 
@@ -577,6 +858,14 @@ import requests
 import json
 
 BASE_URL = "http://localhost:8080/api/v1"
+
+# 打开项目
+def open_project(project_path: str):
+    response = requests.post(
+        f"{BASE_URL}/projects/{requests.utils.quote(project_path)}/open",
+        json={}
+    )
+    return response.json()
 
 # 创建会话
 def create_session(project_path: str, title: str):
@@ -608,8 +897,39 @@ def send_message_stream(session_id: str, prompt: str):
             if data.get("type") == "chunk":
                 yield data.get("content", "")
 
+# 订阅实时事件
+def subscribe_events(project_path: str, on_event=None):
+    import sseclient
+    encoded_path = requests.utils.quote(project_path, safe="")
+    sse_url = f"{BASE_URL}/projects/{encoded_path}/events"
+    
+    response = requests.get(sse_url, stream=True, headers={
+        'Accept': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+    })
+    
+    client = sseclient.SSEClient(response)
+    for event in client.events():
+        data = json.loads(event.data)
+        if on_event:
+            on_event(event.event, data)
+        else:
+            print(f"事件 [{event.event}]: {data}")
+
 # 使用示例
-session = create_session("/path/to/project", "My Session")
+project_path = "/path/to/project"
+open_project(project_path)  # 必须先打开项目
+session = create_session(project_path, "My Session")
+
+# 在后台订阅事件
+import threading
+threading.Thread(
+    target=subscribe_events,
+    args=(project_path, lambda t, d: print(f"收到事件: {t}")),
+    daemon=True
+).start()
+
+# 发送消息
 for chunk in send_message_stream(session["id"], "Hello!"):
     print(chunk, end="", flush=True)
 ```
@@ -619,6 +939,9 @@ for chunk in send_message_stream(session["id"], "Hello!"):
 ### 常见错误码
 
 - `PROJECT_NOT_FOUND`: 项目不存在
+- `APP_NOT_OPENED`: 项目的 app 实例未打开（需要先调用 open API）
+- `APP_ALREADY_OPEN`: 项目已经打开（重复调用 open）
+- `APP_NOT_OPEN`: 项目未打开（调用 close 时）
 - `SESSION_NOT_FOUND`: 会话不存在
 - `MESSAGE_NOT_FOUND`: 消息不存在
 - `INVALID_PROJECT_PATH`: 项目路径无效
@@ -642,12 +965,14 @@ for chunk in send_message_stream(session["id"], "Hello!"):
 
 ## 注意事项
 
-1. **项目路径编码**：在 URL 中使用项目路径时，需要进行 URL 编码
-2. **会话隔离**：每个项目的会话数据存储在对应的 `data_dir` 中，相互独立
-3. **并发限制**：建议对同一会话的并发请求进行限制，避免冲突
-4. **流式响应**：使用流式响应时，确保客户端正确处理 SSE 格式
-5. **权限管理**：在 `--yolo` 模式下，所有权限请求会自动批准；否则需要手动处理
-6. **数据持久化**：所有数据存储在 SQLite 数据库中，位于项目的 `data_dir` 目录
+1. **项目生命周期管理**：在使用会话和消息功能之前，必须先调用 `POST /api/v1/projects/{project_path}/open` 打开项目。使用完毕后可以调用 `POST /api/v1/projects/{project_path}/close` 关闭项目以释放资源。
+2. **项目路径编码**：在 URL 中使用项目路径时，需要进行 URL 编码
+3. **会话隔离**：每个项目的会话数据存储在对应的 `data_dir` 中，相互独立
+4. **并发限制**：建议对同一会话的并发请求进行限制，避免冲突
+5. **流式响应**：使用流式响应时，确保客户端正确处理 SSE 格式
+6. **权限管理**：在 `--yolo` 模式下，所有权限请求会自动批准；否则需要手动处理
+7. **数据持久化**：所有数据存储在 SQLite 数据库中，位于项目的 `data_dir` 目录
+8. **资源管理**：打开的 app 实例会占用内存和数据库连接，建议在不使用时及时关闭
 
 ## 未来扩展
 

@@ -12,9 +12,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/crush/api"
-	"github.com/charmbracelet/crush/internal/app"
 	"github.com/charmbracelet/crush/internal/config"
-	"github.com/charmbracelet/crush/internal/db"
 	"github.com/charmbracelet/crush/internal/projects"
 )
 
@@ -63,9 +61,6 @@ func (m *multiHandler) WithGroup(name string) slog.Handler {
 
 // StartServer 启动 API 服务器
 func StartServer(port int, host string) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
 	// 解析命令行参数（类似 internal/cmd 的方式）
 	cwd, err := resolveCwd()
 	if err != nil {
@@ -90,7 +85,7 @@ func StartServer(port int, host string) {
 		AddSource: false,
 	})
 	fileHandler := slog.Default().Handler()
-	
+
 	// 创建多路复用 handler
 	multi := &multiHandler{handlers: []slog.Handler{consoleHandler, fileHandler}}
 	slog.SetDefault(slog.New(multi))
@@ -106,24 +101,8 @@ func StartServer(port int, host string) {
 		slog.Warn("Failed to register project", "error", err)
 	}
 
-	// 连接数据库
-	conn, err := db.Connect(ctx, cfg.Options.DataDirectory)
-	if err != nil {
-		slog.Error("Failed to connect to database", "error", err)
-		os.Exit(1)
-	}
-	defer conn.Close()
-
-	// 创建 app 实例
-	appInstance, err := app.New(ctx, conn, cfg)
-	if err != nil {
-		slog.Error("Failed to create app instance", "error", err)
-		os.Exit(1)
-	}
-	defer appInstance.Shutdown()
-
-	// 创建 API 服务器
-	server := api.NewServer(appInstance, host, port)
+	// 创建 API 服务器（不再需要默认 app 实例）
+	server := api.NewServer(host, port)
 
 	// 设置信号处理
 	sigChan := make(chan os.Signal, 1)
@@ -139,7 +118,7 @@ func StartServer(port int, host string) {
 		}
 		slog.Info("API server goroutine exited")
 	}()
-	
+
 	// 等待一小段时间确保服务器启动
 	time.Sleep(100 * time.Millisecond)
 	slog.Info("服务器应该已经启动，等待请求...")

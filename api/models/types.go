@@ -41,6 +41,23 @@ type CreateProjectResponse struct {
 	Project ProjectResponse `json:"project"`
 }
 
+// Project Lifecycle API
+
+type OpenProjectResponse struct {
+	ProjectPath string `json:"project_path"`
+	Status      string `json:"status"`
+}
+
+type CloseProjectResponse struct {
+	ProjectPath string `json:"project_path"`
+	Status      string `json:"status"`
+}
+
+type ConnectProjectResponse struct {
+	IsOpen      bool   `json:"is_open"`
+	ProjectPath string `json:"project_path"`
+}
+
 // Sessions API
 
 type SessionsResponse struct {

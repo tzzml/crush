@@ -21,6 +21,10 @@ func (h *Handlers) HandleListSessions(w http.ResponseWriter, r *http.Request) {
 	// 获取项目的 app 实例
 	appInstance, err := h.GetAppForProject(r.Context(), projectPath)
 	if err != nil {
+		if strings.Contains(err.Error(), "not open") {
+			WriteError(w, "APP_NOT_OPENED", "Project app instance is not open. Call open first: "+err.Error(), http.StatusBadRequest)
+			return
+		}
 		WriteError(w, "PROJECT_NOT_FOUND", "Failed to get app for project: "+err.Error(), http.StatusNotFound)
 		return
 	}
@@ -62,16 +66,18 @@ func (h *Handlers) HandleCreateSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	slog.Info("HandleCreateSession called", "project_path", projectPath, "title", req.Title, "full_url", r.URL.String(), "raw_path", r.URL.Path)
 
 	// 获取项目的 app 实例
 	appInstance, err := h.GetAppForProject(r.Context(), projectPath)
 	if err != nil {
+		if strings.Contains(err.Error(), "not open") {
+			WriteError(w, "APP_NOT_OPENED", "Project app instance is not open. Call open first: "+err.Error(), http.StatusBadRequest)
+			return
+		}
 		WriteError(w, "PROJECT_NOT_FOUND", "Failed to get app for project: "+err.Error(), http.StatusNotFound)
 		return
 	}
 
-	slog.Info("Got app instance for session creation", "project_path", projectPath, "app_instance", fmt.Sprintf("%p", appInstance))
 
 	// 创建会话
 	session, err := appInstance.Sessions.Create(r.Context(), req.Title)
@@ -80,7 +86,7 @@ func (h *Handlers) HandleCreateSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	slog.Info("Created session", "session_id", session.ID, "title", session.Title)
+	slog.Info("Session created", "project", projectPath, "session_id", session.ID)
 
 	response := models.CreateSessionResponse{
 		Session: models.SessionToResponse(session),
@@ -100,6 +106,10 @@ func (h *Handlers) HandleGetSession(w http.ResponseWriter, r *http.Request) {
 	// 获取项目的 app 实例
 	appInstance, err := h.GetAppForProject(r.Context(), projectPath)
 	if err != nil {
+		if strings.Contains(err.Error(), "not open") {
+			WriteError(w, "APP_NOT_OPENED", "Project app instance is not open. Call open first: "+err.Error(), http.StatusBadRequest)
+			return
+		}
 		WriteError(w, "PROJECT_NOT_FOUND", "Failed to get app for project: "+err.Error(), http.StatusNotFound)
 		return
 	}
@@ -129,6 +139,10 @@ func (h *Handlers) HandleDeleteSession(w http.ResponseWriter, r *http.Request) {
 	// 获取项目的 app 实例
 	appInstance, err := h.GetAppForProject(r.Context(), projectPath)
 	if err != nil {
+		if strings.Contains(err.Error(), "not open") {
+			WriteError(w, "APP_NOT_OPENED", "Project app instance is not open. Call open first: "+err.Error(), http.StatusBadRequest)
+			return
+		}
 		WriteError(w, "PROJECT_NOT_FOUND", "Failed to get app for project: "+err.Error(), http.StatusNotFound)
 		return
 	}

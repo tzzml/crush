@@ -23,31 +23,26 @@ var globalAppManager = &AppManager{
 	apps: make(map[string]*app.App),
 }
 
-// GetAppForProject 获取指定项目的 app 实例
-func (h *Handlers) GetAppForProject(ctx context.Context, projectPath string) (*app.App, error) {
-	slog.Info("GetAppForProject called", "project_path", projectPath)
-	globalAppManager.mu.RLock()
-	if app, ok := globalAppManager.apps[projectPath]; ok {
-		globalAppManager.mu.RUnlock()
-		slog.Info("Found cached app instance", "project_path", projectPath, "app_ptr", fmt.Sprintf("%p", app))
-		return app, nil
-	}
-	globalAppManager.mu.RUnlock()
-	slog.Info("No cached app instance found, creating new one", "project_path", projectPath)
+// AppStatus 表示 app 实例的状态
+type AppStatus struct {
+	IsOpen   bool   `json:"is_open"`
+	ProjectPath string `json:"project_path"`
+}
 
-	// 需要创建新的 app 实例
+// Open 创建并启动项目的 app 实例
+func (h *Handlers) Open(ctx context.Context, projectPath string) error {
 	globalAppManager.mu.Lock()
 	defer globalAppManager.mu.Unlock()
 
-	// 双重检查
-	if app, ok := globalAppManager.apps[projectPath]; ok {
-		return app, nil
+	// 检查是否已经打开
+	if _, ok := globalAppManager.apps[projectPath]; ok {
+		return fmt.Errorf("app instance already open for project: %s", projectPath)
 	}
 
 	// 获取项目信息
 	projectList, err := projects.List()
 	if err != nil {
-		return nil, fmt.Errorf("failed to list projects: %w", err)
+		return fmt.Errorf("failed to list projects: %w", err)
 	}
 
 	var project *projects.Project
@@ -59,42 +54,80 @@ func (h *Handlers) GetAppForProject(ctx context.Context, projectPath string) (*a
 	}
 
 	if project == nil {
-		return nil, fmt.Errorf("project not found: %s", projectPath)
+		return fmt.Errorf("project not found: %s", projectPath)
 	}
 
 	// 加载配置
 	cfg, err := config.Load(project.Path, project.DataDir, false)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load config: %w", err)
+		return fmt.Errorf("failed to load config: %w", err)
 	}
 
 	// 确保数据目录存在
 	if err := os.MkdirAll(project.DataDir, 0o755); err != nil {
-		return nil, fmt.Errorf("failed to create data directory: %w", err)
+		return fmt.Errorf("failed to create data directory: %w", err)
 	}
 
 	// 连接数据库
 	conn, err := db.Connect(ctx, project.DataDir)
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to database: %w", err)
+		return fmt.Errorf("failed to connect to database: %w", err)
 	}
 
 	// 创建 app 实例
 	appInstance, err := app.New(ctx, conn, cfg)
 	if err != nil {
 		conn.Close()
-		return nil, fmt.Errorf("failed to create app instance: %w", err)
+		return fmt.Errorf("failed to create app instance: %w", err)
 	}
 
 	globalAppManager.apps[projectPath] = appInstance
-	slog.Info("Created app instance for project", "path", projectPath, "data_dir", project.DataDir, "db_conn", fmt.Sprintf("%p", conn))
+	slog.Info("Opened project app instance", "project", projectPath)
 
-	return appInstance, nil
+	return nil
 }
 
-// GetDefaultApp 获取默认的 app 实例（用于不需要项目上下文的操作）
-func (h *Handlers) GetDefaultApp() *app.App {
-	return h.app
+// Close 关闭并清理项目的 app 实例
+func (h *Handlers) Close(ctx context.Context, projectPath string) error {
+	globalAppManager.mu.Lock()
+	defer globalAppManager.mu.Unlock()
+
+	appInstance, ok := globalAppManager.apps[projectPath]
+	if !ok {
+		return fmt.Errorf("app instance not open for project: %s", projectPath)
+	}
+
+	// 关闭 app 实例
+	appInstance.Shutdown()
+	delete(globalAppManager.apps, projectPath)
+	slog.Info("Closed project app instance", "project", projectPath)
+
+	return nil
+}
+
+// Connect 检查项目 app 实例是否存在并返回状态
+func (h *Handlers) Connect(ctx context.Context, projectPath string) (*AppStatus, error) {
+	globalAppManager.mu.RLock()
+	defer globalAppManager.mu.RUnlock()
+
+	_, isOpen := globalAppManager.apps[projectPath]
+	return &AppStatus{
+		IsOpen:      isOpen,
+		ProjectPath: projectPath,
+	}, nil
+}
+
+// GetAppForProject 获取已打开的 app 实例（如果未打开则返回错误）
+func (h *Handlers) GetAppForProject(ctx context.Context, projectPath string) (*app.App, error) {
+	globalAppManager.mu.RLock()
+	defer globalAppManager.mu.RUnlock()
+
+	appInstance, ok := globalAppManager.apps[projectPath]
+	if !ok {
+		return nil, fmt.Errorf("app instance not open for project: %s (call open first)", projectPath)
+	}
+
+	return appInstance, nil
 }
 
 // GetAppForSession 通过会话ID查找对应的app实例

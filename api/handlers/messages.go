@@ -26,6 +26,10 @@ func (h *Handlers) HandleListMessages(w http.ResponseWriter, r *http.Request) {
 	// 获取项目的 app 实例
 	appInstance, err := h.GetAppForProject(r.Context(), projectPath)
 	if err != nil {
+		if strings.Contains(err.Error(), "not open") {
+			WriteError(w, "APP_NOT_OPENED", "Project app instance is not open. Call open first: "+err.Error(), http.StatusBadRequest)
+			return
+		}
 		WriteError(w, "PROJECT_NOT_FOUND", "Failed to get app for project: "+err.Error(), http.StatusNotFound)
 		return
 	}
@@ -56,8 +60,6 @@ func (h *Handlers) HandleCreateMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	slog.Info("HandleCreateMessage called", "project_path", projectPath, "session_id", sessionID, "full_url", r.URL.String(), "raw_path", r.URL.Path)
-
 	var req models.CreateMessageRequest
 	if err := decodeJSON(r, &req); err != nil {
 		WriteError(w, "INVALID_REQUEST", "Invalid request body: "+err.Error(), http.StatusBadRequest)
@@ -72,15 +74,15 @@ func (h *Handlers) HandleCreateMessage(w http.ResponseWriter, r *http.Request) {
 	// 获取项目的 app 实例
 	appInstance, err := h.GetAppForProject(r.Context(), projectPath)
 	if err != nil {
+		if strings.Contains(err.Error(), "not open") {
+			WriteError(w, "APP_NOT_OPENED", "Project app instance is not open. Call open first: "+err.Error(), http.StatusBadRequest)
+			return
+		}
 		WriteError(w, "PROJECT_NOT_FOUND", "Failed to get app for project: "+err.Error(), http.StatusNotFound)
 		return
 	}
 
-	slog.Info("Got app instance for project", "project_path", projectPath, "app_instance", fmt.Sprintf("%p", appInstance))
-
-	// 不再预先检查会话是否存在，直接尝试创建消息
-	// 如果会话不存在，消息创建会失败并返回适当的错误
-	slog.Info("Proceeding to create message without session pre-check", "session_id", sessionID)
+	// 直接创建消息，如果会话不存在会自动失败
 
 	// 自动批准权限请求
 	appInstance.Permissions.AutoApproveSession(sessionID)
@@ -99,7 +101,7 @@ func (h *Handlers) handleSyncMessage(w http.ResponseWriter, r *http.Request, ses
 	ctx := r.Context()
 
 	// 创建用户消息
-	userMsg, err := appInstance.Messages.Create(ctx, sessionID, message.CreateMessageParams{
+	_, err := appInstance.Messages.Create(ctx, sessionID, message.CreateMessageParams{
 		Role:             message.User,
 		Parts:            []message.ContentPart{message.TextContent{Text: prompt}},
 		Model:            "",
@@ -110,7 +112,6 @@ func (h *Handlers) handleSyncMessage(w http.ResponseWriter, r *http.Request, ses
 		WriteError(w, "INTERNAL_ERROR", "Failed to create user message: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	slog.Info("Created user message", "message_id", userMsg.ID, "session_id", sessionID)
 
 	// 运行 AI
 	done := make(chan struct {
@@ -127,13 +128,11 @@ func (h *Handlers) handleSyncMessage(w http.ResponseWriter, r *http.Request, ses
 			return
 		}
 
-		promptPreview := prompt
-		if len(prompt) > 50 {
-			promptPreview = prompt[:50] + "..."
-		}
-		slog.Info("Starting AI run", "session_id", sessionID, "prompt", promptPreview)
+		// 执行AI推理
 		result, err := appInstance.AgentCoordinator.Run(ctx, sessionID, prompt)
-		slog.Info("AI run completed", "session_id", sessionID, "error", err)
+		if err != nil {
+			slog.Error("AI run failed", "session_id", sessionID, "error", err)
+		}
 		done <- struct {
 			result interface{}
 			err    error
@@ -322,6 +321,10 @@ func (h *Handlers) HandleGetMessage(w http.ResponseWriter, r *http.Request) {
 	// 获取项目的 app 实例
 	appInstance, err := h.GetAppForProject(r.Context(), projectPath)
 	if err != nil {
+		if strings.Contains(err.Error(), "not open") {
+			WriteError(w, "APP_NOT_OPENED", "Project app instance is not open. Call open first: "+err.Error(), http.StatusBadRequest)
+			return
+		}
 		WriteError(w, "PROJECT_NOT_FOUND", "Failed to get app for project: "+err.Error(), http.StatusNotFound)
 		return
 	}

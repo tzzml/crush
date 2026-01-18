@@ -25,9 +25,11 @@ from typing import Dict, Any, Optional, Generator
 
 try:
     import requests
-except ImportError:
-    print("错误: 需要安装 requests 库")
-    print("请运行: pip install requests")
+    import sseclient
+except ImportError as e:
+    missing_lib = str(e).split("'")[1] if "'" in str(e) else "requests or sseclient"
+    print(f"错误: 需要安装 {missing_lib} 库")
+    print("请运行: pip install requests sseclient-py")
     sys.exit(1)
 
 
@@ -92,6 +94,36 @@ class CrushAPIClient:
             print(f"  数据目录: {project['data_dir']}")
             print(f"  最后访问: {project['last_accessed']}")
         return project
+
+    def open_project(self, project_path: str) -> Optional[Dict]:
+        """打开项目的 app 实例"""
+        print(f"\n[2.5] 打开项目: {project_path}")
+        encoded_path = urllib.parse.quote(project_path, safe="")
+        response = self._request("POST", f"/projects/{encoded_path}/open", json={})
+        data = self._handle_response(response)
+        if data.get("status") == "opened":
+            print(f"项目已打开: {data.get('project_path')}")
+        return data
+
+    def close_project(self, project_path: str) -> Optional[Dict]:
+        """关闭项目的 app 实例"""
+        print(f"\n[关闭] 关闭项目: {project_path}")
+        encoded_path = urllib.parse.quote(project_path, safe="")
+        response = self._request("POST", f"/projects/{encoded_path}/close", json={})
+        data = self._handle_response(response)
+        if data.get("status") == "closed":
+            print(f"项目已关闭: {data.get('project_path')}")
+        return data
+
+    def connect_project(self, project_path: str) -> Optional[Dict]:
+        """检查项目连接状态"""
+        print(f"\n[连接] 检查项目状态: {project_path}")
+        encoded_path = urllib.parse.quote(project_path, safe="")
+        response = self._request("GET", f"/projects/{encoded_path}/connect")
+        data = self._handle_response(response)
+        is_open = data.get("is_open", False)
+        print(f"项目状态: {'已打开' if is_open else '未打开'}")
+        return data
 
     # Sessions API
 
@@ -253,6 +285,53 @@ class CrushAPIClient:
             print(f"消息内容: {message['content'][:200]}...")
         return message
 
+    def subscribe_events(self, project_path: str) -> Generator[Dict[str, Any], None, None]:
+        """订阅项目的实时事件 (SSE)"""
+        print(f"\n[11] 订阅项目实时事件 (SSE): {project_path}")
+
+        # SSE URL: /api/v1/projects/{project_path}/events
+        encoded_path = urllib.parse.quote(project_path, safe="")
+        sse_url = f"{self.base_url}/projects/{encoded_path}/events"
+
+        try:
+            response = requests.get(sse_url, stream=True, headers={
+                'Accept': 'text/event-stream',
+                'Cache-Control': 'no-cache',
+            })
+
+            if response.status_code != 200:
+                print(f"✗ SSE 连接失败: HTTP {response.status_code}")
+                return
+
+            print("✓ SSE 连接成功，开始接收事件...")
+
+            client = sseclient.SSEClient(response)
+
+            for event in client.events():
+                try:
+                    data = json.loads(event.data)
+                    event_type = event.event if event.event else "unknown"
+
+                    print(f"📡 收到事件 [{event_type}]: {json.dumps(data, ensure_ascii=False, indent=2)[:200]}...")
+
+                    yield {
+                        "event_type": event_type,
+                        "data": data,
+                        "timestamp": time.time()
+                    }
+
+                except json.JSONDecodeError as e:
+                    print(f"⚠️ 无法解析事件数据: {e}")
+                    continue
+                except KeyboardInterrupt:
+                    print("\n✓ SSE 连接已断开")
+                    break
+
+        except requests.RequestException as e:
+            print(f"✗ SSE 连接错误: {e}")
+        except KeyboardInterrupt:
+            print("\n✓ SSE 连接已断开")
+
 
 def run_full_test(base_url: str, project_path: str):
     """运行完整的 API 测试流程"""
@@ -273,6 +352,12 @@ def run_full_test(base_url: str, project_path: str):
         project = client.create_project(project_path)
         if not project:
             print("错误: 无法创建项目，测试终止")
+            return
+
+        # 2.5. 打开项目
+        open_result = client.open_project(project_path)
+        if not open_result or open_result.get("status") != "opened":
+            print("错误: 无法打开项目，测试终止")
             return
 
         # 3. 获取项目会话
@@ -316,11 +401,32 @@ def run_full_test(base_url: str, project_path: str):
         # 11. 获取更新后的会话信息
         updated_session = client.get_session(project_path, session_id)
 
+        # 12. 测试 SSE 实时事件（运行一段时间后停止）
+        print("\n" + "-" * 60)
+        print("12. 测试 SSE 实时事件 (运行 10 秒)...")
+
+        event_count = 0
+        start_time = time.time()
+
+        try:
+            for event in client.subscribe_events(project_path):
+                event_count += 1
+                print(f"📊 已收到 {event_count} 个事件")
+
+                # 运行 10 秒后停止
+                if time.time() - start_time > 10:
+                    print("✓ SSE 测试完成 (10 秒)")
+                    break
+
+        except Exception as e:
+            print(f"⚠️ SSE 测试异常: {e}")
+
         print("\n" + "=" * 60)
         print("测试完成!")
         print("=" * 60)
         print(f"创建的会话 ID: {session_id}")
         print(f"会话包含 {updated_session.get('message_count', 0) if updated_session else 0} 条消息")
+        print(f"SSE 事件接收: {event_count} 个")
 
     except requests.exceptions.ConnectionError:
         print("\n错误: 无法连接到 API 服务器")

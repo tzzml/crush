@@ -12,7 +12,6 @@ import (
 
 	"github.com/charmbracelet/crush/api/handlers"
 	"github.com/charmbracelet/crush/api/middleware"
-	"github.com/charmbracelet/crush/internal/app"
 )
 
 // WriteError 写入错误响应
@@ -36,16 +35,15 @@ func WriteJSON(w http.ResponseWriter, statusCode int, data interface{}) {
 
 // Server 表示 API 服务器
 type Server struct {
-	app    *app.App
 	server *http.Server
 }
 
 // NewServer 创建新的 API 服务器实例
-func NewServer(app *app.App, host string, port int) *Server {
+func NewServer(host string, port int) *Server {
 	mux := http.NewServeMux()
 
-	// 创建处理器
-	h := handlers.New(app)
+	// 创建处理器（不再需要 app 实例）
+	h := handlers.New()
 
 	// API 路由处理器
 	apiHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -68,6 +66,29 @@ func NewServer(app *app.App, host string, port int) *Server {
 			slog.Warn("Method not allowed for /api/v1/projects", "method", r.Method)
 		} else {
 			slog.Debug("Path does not match /api/v1/projects", "path", path, "expected", "/api/v1/projects")
+		}
+
+		// Project Lifecycle API - open/close/connect
+		if strings.HasPrefix(path, "/api/v1/projects/") && strings.HasSuffix(path, "/open") {
+			// /api/v1/projects/{project_path}/open
+			if r.Method == "POST" {
+				h.HandleOpenProject(w, r)
+				return
+			}
+		}
+		if strings.HasPrefix(path, "/api/v1/projects/") && strings.HasSuffix(path, "/close") {
+			// /api/v1/projects/{project_path}/close
+			if r.Method == "POST" {
+				h.HandleCloseProject(w, r)
+				return
+			}
+		}
+		if strings.HasPrefix(path, "/api/v1/projects/") && strings.HasSuffix(path, "/connect") {
+			// /api/v1/projects/{project_path}/connect
+			if r.Method == "GET" {
+				h.HandleConnectProject(w, r)
+				return
+			}
 		}
 
 		// Sessions API - 需要解析 project_path
@@ -138,6 +159,7 @@ func NewServer(app *app.App, host string, port int) *Server {
 			}
 		}
 
+
 		WriteError(w, "NOT_FOUND", "Endpoint not found", http.StatusNotFound)
 	})
 
@@ -163,6 +185,13 @@ func NewServer(app *app.App, host string, port int) *Server {
 	
 	// 添加一个根级别的调试 handler 来捕获所有请求
 	debugHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// SSE 路由特殊处理，不经过中间件
+		// /api/v1/projects/{project_path}/events
+		if strings.HasPrefix(r.URL.Path, "/api/v1/projects/") && strings.HasSuffix(r.URL.Path, "/events") && r.Method == "GET" {
+			h.HandleSSE(w, r)
+			return
+		}
+
 		// 立即输出，不等待
 		fmt.Fprintf(os.Stderr, "\n=== 请求到达 ===\n")
 		fmt.Fprintf(os.Stderr, "Method: %s\n", r.Method)
@@ -172,7 +201,7 @@ func NewServer(app *app.App, host string, port int) *Server {
 		fmt.Fprintf(os.Stderr, "Host: %s\n", r.Host)
 		fmt.Fprintf(os.Stderr, "RemoteAddr: %s\n", r.RemoteAddr)
 		fmt.Fprintf(os.Stderr, "================\n\n")
-		
+
 		slog.Info("=== 所有请求捕获 ===",
 			"method", r.Method,
 			"path", r.URL.Path,
@@ -197,7 +226,6 @@ func NewServer(app *app.App, host string, port int) *Server {
 	slog.Info("HTTP server configured", "addr", addr, "handler_type", fmt.Sprintf("%T", debugHandler))
 
 	return &Server{
-		app:    app,
 		server: httpServer,
 	}
 }
