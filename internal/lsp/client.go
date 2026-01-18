@@ -157,7 +157,10 @@ func (c *Client) Close(ctx context.Context) error {
 
 	// Shutdown and exit the client
 	if err := c.client.Shutdown(ctx); err != nil {
-		slog.Warn("Failed to shutdown LSP client", "error", err)
+		// Filter out expected connection closed errors during shutdown
+		if !strings.Contains(err.Error(), "jsonrpc2: connection is closed") {
+			slog.Warn("Failed to shutdown LSP client", "error", err)
+		}
 	}
 
 	return c.client.Exit()

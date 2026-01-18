@@ -424,7 +424,8 @@ func (app *App) Shutdown() {
 			if err := client.Close(shutdownCtx); err != nil &&
 				!errors.Is(err, io.EOF) &&
 				!errors.Is(err, context.Canceled) &&
-				err.Error() != "signal: killed" {
+				err.Error() != "signal: killed" &&
+				!strings.Contains(err.Error(), "jsonrpc2: connection is closed") {
 				slog.Warn("Failed to shutdown LSP client", "name", name, "error", err)
 			}
 		})
