@@ -157,6 +157,57 @@ func (h *Handlers) HandleDeleteSession(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, map[string]string{"message": "Session deleted successfully"})
 }
 
+// HandleUpdateSession 处理更新会话的请求
+func (h *Handlers) HandleUpdateSession(w http.ResponseWriter, r *http.Request) {
+	projectPath, sessionID, err := extractProjectAndSessionID(r)
+	if err != nil {
+		WriteError(w, "INVALID_REQUEST", err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	var req models.UpdateSessionRequest
+	if err := decodeJSON(r, &req); err != nil {
+		WriteError(w, "INVALID_REQUEST", "Invalid request body: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// 获取项目的 app 实例
+	appInstance, err := h.GetAppForProject(r.Context(), projectPath)
+	if err != nil {
+		if strings.Contains(err.Error(), "not open") {
+			WriteError(w, "APP_NOT_OPENED", "Project app instance is not open. Call open first: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		WriteError(w, "PROJECT_NOT_FOUND", "Failed to get app for project: "+err.Error(), http.StatusNotFound)
+		return
+	}
+
+	// 获取现有会话
+	session, err := appInstance.Sessions.Get(r.Context(), sessionID)
+	if err != nil {
+		WriteError(w, "SESSION_NOT_FOUND", "Session not found: "+err.Error(), http.StatusNotFound)
+		return
+	}
+
+	// 更新会话字段
+	if req.Title != "" {
+		session.Title = req.Title
+	}
+
+	// 保存更新后的会话
+	updatedSession, err := appInstance.Sessions.Save(r.Context(), session)
+	if err != nil {
+		WriteError(w, "INTERNAL_ERROR", "Failed to update session: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	response := models.UpdateSessionResponse{
+		Session: models.SessionToResponse(updatedSession),
+	}
+
+	WriteJSON(w, http.StatusOK, response)
+}
+
 // extractSessionID 从 URL 中提取会话 ID
 func extractSessionID(r *http.Request) string {
 	path := r.URL.Path

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/url"
 	"path/filepath"
+	"strings"
 
 	"github.com/charmbracelet/crush/api/models"
 	"github.com/charmbracelet/crush/internal/projects"
@@ -87,7 +88,7 @@ func extractProjectPath(r *http.Request) (string, error) {
 	// project_path 需要 URL 解码
 	path := r.URL.Path
 	prefix := "/api/v1/projects/"
-	if !hasPrefix(path, prefix) {
+	if !strings.HasPrefix(path, prefix) {
 		return "", http.ErrMissingFile
 	}
 
@@ -95,7 +96,7 @@ func extractProjectPath(r *http.Request) (string, error) {
 	rest := path[len(prefix):]
 
 	// 找到 /sessions 的位置
-	idx := indexOf(rest, "/sessions")
+	idx := strings.Index(rest, "/sessions")
 	if idx == -1 {
 		return "", http.ErrMissingFile
 	}
@@ -109,18 +110,4 @@ func extractProjectPath(r *http.Request) (string, error) {
 	}
 
 	return decoded, nil
-}
-
-// 辅助函数
-func hasPrefix(s, prefix string) bool {
-	return len(s) >= len(prefix) && s[:len(prefix)] == prefix
-}
-
-func indexOf(s, substr string) int {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return i
-		}
-	}
-	return -1
 }

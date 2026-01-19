@@ -17,7 +17,7 @@ import (
 // a given amount via the boolean argument.
 type letterform func(bool) string
 
-const diag = `╱`
+const diag = `•`
 
 // Opts are the options for rendering the Crush title art.
 type Opts struct {
@@ -35,7 +35,7 @@ type Opts struct {
 // The compact argument determines whether it renders compact for the sidebar
 // or wider for the main pane.
 func Render(version string, compact bool, o Opts) string {
-	const charm = " Charm™"
+	const charm = " Zork™"
 
 	fg := func(c color.Color, s string) string {
 		return lipgloss.NewStyle().Foreground(c).Render(s)
@@ -96,13 +96,15 @@ func Render(version string, compact bool, o Opts) string {
 	for i := range fieldHeight {
 		width := rightWidth
 		if i >= stepDownAt {
-			width = rightWidth - (i - stepDownAt)
+			// width = rightWidth - (i - stepDownAt)
+			width = rightWidth
 		}
 		fmt.Fprint(rightField, fg(o.FieldColor, strings.Repeat(diag, width)), "\n")
 	}
 
 	// Return the wide version.
 	const hGap = " "
+	crush = "\nZork Agent\n  V1.0.0"
 	logo := lipgloss.JoinHorizontal(lipgloss.Top, leftField.String(), hGap, crush, hGap, rightField.String())
 	if o.Width > 0 {
 		// Truncate the logo to the specified width.
@@ -119,11 +121,11 @@ func Render(version string, compact bool, o Opts) string {
 // smaller windows or sidebar usage.
 func SmallRender(width int) string {
 	t := styles.CurrentTheme()
-	title := t.S().Base.Foreground(t.Secondary).Render("Charm™")
-	title = fmt.Sprintf("%s %s", title, styles.ApplyBoldForegroundGrad("Crush", t.Secondary, t.Primary))
+	title := t.S().Base.Foreground(t.Secondary).Render("Zork™")
+	title = fmt.Sprintf("%s %s", title, styles.ApplyBoldForegroundGrad("Zork Agent", t.Secondary, t.Primary))
 	remainingWidth := width - lipgloss.Width(title) - 1 // 1 for the space after "Crush"
 	if remainingWidth > 0 {
-		lines := strings.Repeat("╱", remainingWidth)
+		lines := strings.Repeat("•", remainingWidth)
 		title = fmt.Sprintf("%s %s", title, t.S().Base.Foreground(t.Primary).Render(lines))
 	}
 	return title

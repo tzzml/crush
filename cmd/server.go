@@ -3,17 +3,20 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
+	"strings"
+	"sync"
 	"syscall"
 	"time"
 
 	"github.com/charmbracelet/crush/api"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/projects"
+	"github.com/spf13/cobra"
 )
 
 // multiHandler 实现 slog.Handler 接口，同时将日志写入多个 handler
@@ -59,17 +62,81 @@ func (m *multiHandler) WithGroup(name string) slog.Handler {
 	return &multiHandler{handlers: handlers}
 }
 
+// simpleHandler 实现简洁的日志格式，类似 nginx 日志
+type simpleHandler struct {
+	mu     sync.Mutex
+	writer io.Writer
+	level  slog.Level
+}
+
+func newSimpleHandler(w io.Writer, level slog.Level) *simpleHandler {
+	return &simpleHandler{
+		writer: w,
+		level:  level,
+	}
+}
+
+func (h *simpleHandler) Enabled(ctx context.Context, level slog.Level) bool {
+	return level >= h.level
+}
+
+func (h *simpleHandler) Handle(ctx context.Context, record slog.Record) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	// 格式化时间 [2026-01-18 23:24:13]
+	timeStr := record.Time.Format("[2006-01-02 15:04:05]")
+
+	// 格式化级别
+	levelStr := record.Level.String()
+	switch record.Level {
+	case slog.LevelDebug:
+		levelStr = "DEBUG"
+	case slog.LevelInfo:
+		levelStr = "INFO"
+	case slog.LevelWarn:
+		levelStr = "WARN"
+	case slog.LevelError:
+		levelStr = "ERROR"
+	}
+
+	// 构建日志行
+	var parts []string
+	parts = append(parts, timeStr, levelStr, record.Message)
+
+	// 添加其他字段
+	record.Attrs(func(attr slog.Attr) bool {
+		if attr.Key != "" {
+			parts = append(parts, fmt.Sprintf("%s=%v", attr.Key, attr.Value.Any()))
+		}
+		return true
+	})
+
+	// 输出日志行
+	_, err := fmt.Fprintln(h.writer, strings.Join(parts, " "))
+	return err
+}
+
+func (h *simpleHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	// 简化实现：不处理属性继承
+	return h
+}
+
+func (h *simpleHandler) WithGroup(name string) slog.Handler {
+	// 简化实现：不处理分组
+	return h
+}
+
 // StartServer 启动 API 服务器
-func StartServer(port int, host string) {
-	// 解析命令行参数（类似 internal/cmd 的方式）
-	cwd, err := resolveCwd()
+func StartServer(cmd *cobra.Command, port int, host string) {
+	debug, _ := cmd.Flags().GetBool("debug")
+	dataDir, _ := cmd.Flags().GetString("data-dir")
+
+	cwd, err := ResolveCwd(cmd)
 	if err != nil {
 		slog.Error("Failed to resolve working directory", "error", err)
 		os.Exit(1)
 	}
-
-	dataDir := getDataDir()
-	debug := getDebugFlag()
 
 	// 初始化配置
 	cfg, err := config.Init(cwd, dataDir, debug)
@@ -79,11 +146,8 @@ func StartServer(port int, host string) {
 	}
 
 	// 为服务器模式添加控制台日志输出
-	// 创建一个同时输出到控制台和文件的日志处理器
-	consoleHandler := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
-		Level:     slog.LevelInfo,
-		AddSource: false,
-	})
+	// 创建一个简洁格式的控制台日志处理器
+	consoleHandler := newSimpleHandler(os.Stderr, slog.LevelInfo)
 	fileHandler := slog.Default().Handler()
 
 	// 创建多路复用 handler
@@ -91,7 +155,7 @@ func StartServer(port int, host string) {
 	slog.SetDefault(slog.New(multi))
 
 	// 创建数据目录
-	if err := createDotCrushDir(cfg.Options.DataDirectory); err != nil {
+	if err := createDotZorkAgentDir(cfg.Options.DataDirectory); err != nil {
 		slog.Error("Failed to create data directory", "error", err)
 		os.Exit(1)
 	}
@@ -133,60 +197,4 @@ func StartServer(port int, host string) {
 	if err := server.Shutdown(shutdownCtx); err != nil {
 		slog.Error("Error shutting down server", "error", err)
 	}
-}
-
-// resolveCwd 解析工作目录
-func resolveCwd() (string, error) {
-	// 检查 --cwd 或 -c 参数
-	for i, arg := range os.Args {
-		if (arg == "--cwd" || arg == "-c") && i+1 < len(os.Args) {
-			cwd := os.Args[i+1]
-			if err := os.Chdir(cwd); err != nil {
-				return "", fmt.Errorf("failed to change directory: %v", err)
-			}
-			return cwd, nil
-		}
-	}
-	// 默认使用当前工作目录
-	cwd, err := os.Getwd()
-	if err != nil {
-		return "", fmt.Errorf("failed to get current working directory: %v", err)
-	}
-	return cwd, nil
-}
-
-// getDataDir 获取数据目录
-func getDataDir() string {
-	for i, arg := range os.Args {
-		if (arg == "--data-dir" || arg == "-D") && i+1 < len(os.Args) {
-			return os.Args[i+1]
-		}
-	}
-	return ""
-}
-
-// getDebugFlag 获取调试标志
-func getDebugFlag() bool {
-	for _, arg := range os.Args {
-		if arg == "--debug" || arg == "-d" {
-			return true
-		}
-	}
-	return false
-}
-
-// createDotCrushDir 创建 .crush 目录
-func createDotCrushDir(dir string) error {
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return fmt.Errorf("failed to create data directory: %q %w", dir, err)
-	}
-
-	gitIgnorePath := filepath.Join(dir, ".gitignore")
-	if _, err := os.Stat(gitIgnorePath); os.IsNotExist(err) {
-		if err := os.WriteFile(gitIgnorePath, []byte("*\n"), 0o644); err != nil {
-			return fmt.Errorf("failed to create .gitignore file: %q %w", gitIgnorePath, err)
-		}
-	}
-
-	return nil
 }

@@ -60,7 +60,8 @@ def test_sse(project_path: str = "/tmp/sse-test"):
                             parts = data.get("parts", [])
                             for part in parts:
                                 if isinstance(part, dict) and part.get("type") == "text":
-                                    content = part.get("data", {}).get("text", "")
+                                    # 新的 parts 格式：{"type": "text", "text": "..."}
+                                    content = part.get("text", "") or part.get("data", {}).get("text", "")
                                     break
                         
                         print(f"   消息 ID: {msg_id}...")

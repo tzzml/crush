@@ -5,7 +5,7 @@
 ### 1. 启动服务器
 
 ```bash
-crush --server
+crush serve
 ```
 
 ### 2. 运行测试

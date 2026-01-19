@@ -1,9 +1,11 @@
 package models
 
 import (
+	"encoding/base64"
 	"time"
 
 	"github.com/charmbracelet/crush/internal/message"
+	"github.com/charmbracelet/crush/internal/permission"
 	"github.com/charmbracelet/crush/internal/projects"
 	"github.com/charmbracelet/crush/internal/session"
 )
@@ -88,6 +90,14 @@ type CreateSessionResponse struct {
 	Session SessionResponse `json:"session"`
 }
 
+type UpdateSessionRequest struct {
+	Title string `json:"title,omitempty"`
+}
+
+type UpdateSessionResponse struct {
+	Session SessionResponse `json:"session"`
+}
+
 type SessionDetailResponse struct {
 	Session SessionResponse `json:"session"`
 }
@@ -100,16 +110,18 @@ type MessagesResponse struct {
 }
 
 type MessageResponse struct {
-	ID               string `json:"id"`
-	SessionID        string `json:"session_id"`
-	Role             string `json:"role"`
-	Content          string `json:"content"`
-	Model            string `json:"model,omitempty"`
-	Provider         string `json:"provider,omitempty"`
-	IsSummaryMessage bool   `json:"is_summary_message"`
-	CreatedAt        int64  `json:"created_at"`
-	UpdatedAt        int64  `json:"updated_at"`
-	FinishedAt       *int64 `json:"finished_at,omitempty"`
+	ID               string                   `json:"id"`
+	SessionID        string                   `json:"session_id"`
+	Role             string                   `json:"role"`
+	Content          string                   `json:"content"`
+	Model            string                   `json:"model,omitempty"`
+	Provider         string                   `json:"provider,omitempty"`
+	IsSummaryMessage bool                     `json:"is_summary_message"`
+	CreatedAt        int64                    `json:"created_at"`
+	UpdatedAt        int64                    `json:"updated_at"`
+	FinishedAt       *int64                   `json:"finished_at,omitempty"`
+	FinishReason     *string                  `json:"finish_reason,omitempty"`
+	Parts            []map[string]interface{} `json:"parts,omitempty"`
 }
 
 type CreateMessageRequest struct {
@@ -135,6 +147,66 @@ type SSEEvent struct {
 	Message   MessageResponse `json:"message,omitempty"`
 	Session   SessionResponse `json:"session,omitempty"`
 	Error     *ErrorDetail    `json:"error,omitempty"`
+}
+
+// Config API
+
+type ConfigResponse struct {
+	WorkingDir string         `json:"working_dir"`
+	DataDir    string         `json:"data_dir"`
+	Debug      bool           `json:"debug"`
+	Configured bool           `json:"configured"`
+	Providers  []ProviderInfo `json:"providers,omitempty"`
+}
+
+type ProviderInfo struct {
+	Name       string `json:"name"`
+	Type       string `json:"type"`
+	Configured bool   `json:"configured"`
+}
+
+// Permission API
+
+type PermissionsResponse struct {
+	SkipRequests bool                `json:"skip_requests"`
+	Pending      []PermissionRequest `json:"pending,omitempty"`
+}
+
+type PermissionRequest struct {
+	ID          string `json:"id"`
+	SessionID   string `json:"session_id"`
+	ToolCallID  string `json:"tool_call_id"`
+	ToolName    string `json:"tool_name"`
+	Description string `json:"description"`
+	Action      string `json:"action"`
+	Params      any    `json:"params,omitempty"`
+	Path        string `json:"path"`
+}
+
+type PermissionReplyRequest struct {
+	Granted    bool `json:"granted"`
+	Persistent bool `json:"persistent,omitempty"`
+}
+
+// ToInternal 转换为内部 permission.PermissionRequest 类型
+func (p PermissionRequest) ToInternal() permission.PermissionRequest {
+	return permission.PermissionRequest{
+		ID:          p.ID,
+		SessionID:   p.SessionID,
+		ToolCallID:  p.ToolCallID,
+		ToolName:    p.ToolName,
+		Description: p.Description,
+		Action:      p.Action,
+		Params:      p.Params,
+		Path:        p.Path,
+	}
+}
+
+// Health API
+
+type HealthResponse struct {
+	Status  string `json:"status"`
+	Version string `json:"version,omitempty"`
 }
 
 // 辅助函数：转换内部类型到 API 响应类型
@@ -192,9 +264,25 @@ func MessageToResponse(m message.Message) MessageResponse {
 	}
 
 	var finishedAt *int64
-	if finish := m.FinishPart(); finish != nil && finish.Time > 0 {
-		ts := finish.Time
-		finishedAt = &ts
+	var finishReason *string
+	if finish := m.FinishPart(); finish != nil {
+		if finish.Time > 0 {
+			ts := finish.Time
+			finishedAt = &ts
+		}
+		if finish.Reason != "" {
+			reason := string(finish.Reason)
+			finishReason = &reason
+		}
+	}
+
+	// Convert Parts to JSON-serializable format
+	parts := make([]map[string]interface{}, 0, len(m.Parts))
+	for _, part := range m.Parts {
+		partMap := partToMap(part)
+		if partMap != nil {
+			parts = append(parts, partMap)
+		}
 	}
 
 	return MessageResponse{
@@ -208,5 +296,86 @@ func MessageToResponse(m message.Message) MessageResponse {
 		CreatedAt:        m.CreatedAt,
 		UpdatedAt:        m.UpdatedAt,
 		FinishedAt:       finishedAt,
+		FinishReason:     finishReason,
+		Parts:            parts,
 	}
+}
+
+// partToMap converts a ContentPart to a map for JSON serialization
+func partToMap(part message.ContentPart) map[string]interface{} {
+	result := make(map[string]interface{})
+	
+	switch p := part.(type) {
+	case message.TextContent:
+		result["type"] = "text"
+		result["text"] = p.Text
+	case message.ReasoningContent:
+		result["type"] = "reasoning"
+		result["thinking"] = p.Thinking
+		if p.Signature != "" {
+			result["signature"] = p.Signature
+		}
+		if p.ThoughtSignature != "" {
+			result["thought_signature"] = p.ThoughtSignature
+		}
+		if p.ToolID != "" {
+			result["tool_id"] = p.ToolID
+		}
+		if p.StartedAt > 0 {
+			result["started_at"] = p.StartedAt
+		}
+		if p.FinishedAt > 0 {
+			result["finished_at"] = p.FinishedAt
+		}
+	case message.ImageURLContent:
+		result["type"] = "image_url"
+		result["url"] = p.URL
+		if p.Detail != "" {
+			result["detail"] = p.Detail
+		}
+	case message.BinaryContent:
+		result["type"] = "binary"
+		result["path"] = p.Path
+		result["mime_type"] = p.MIMEType
+		// Data is []byte, encode as base64 string for JSON
+		if len(p.Data) > 0 {
+			result["data"] = base64.StdEncoding.EncodeToString(p.Data)
+		}
+	case message.ToolCall:
+		result["type"] = "tool_call"
+		result["id"] = p.ID
+		result["name"] = p.Name
+		result["input"] = p.Input
+		result["provider_executed"] = p.ProviderExecuted
+		result["finished"] = p.Finished
+	case message.ToolResult:
+		result["type"] = "tool_result"
+		result["tool_call_id"] = p.ToolCallID
+		result["name"] = p.Name
+		result["content"] = p.Content
+		if p.Data != "" {
+			result["data"] = p.Data
+		}
+		if p.MIMEType != "" {
+			result["mime_type"] = p.MIMEType
+		}
+		if p.Metadata != "" {
+			result["metadata"] = p.Metadata
+		}
+		result["is_error"] = p.IsError
+	case message.Finish:
+		result["type"] = "finish"
+		result["reason"] = string(p.Reason)
+		result["time"] = p.Time
+		if p.Message != "" {
+			result["message"] = p.Message
+		}
+		if p.Details != "" {
+			result["details"] = p.Details
+		}
+	default:
+		return nil
+	}
+	
+	return result
 }

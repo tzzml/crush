@@ -2,11 +2,9 @@ package api
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -14,23 +12,14 @@ import (
 	"github.com/charmbracelet/crush/api/middleware"
 )
 
-// WriteError 写入错误响应
+// WriteError 写入错误响应 (委托给 handlers 包)
 func WriteError(w http.ResponseWriter, code string, message string, statusCode int) {
-	w.WriteHeader(statusCode)
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"error": map[string]interface{}{
-			"code":    code,
-			"message": message,
-		},
-	})
+	handlers.WriteError(w, code, message, statusCode)
 }
 
-// WriteJSON 写入 JSON 响应
+// WriteJSON 写入 JSON 响应 (委托给 handlers 包)
 func WriteJSON(w http.ResponseWriter, statusCode int, data interface{}) {
-	w.WriteHeader(statusCode)
-	if err := json.NewEncoder(w).Encode(data); err != nil {
-		slog.Error("Failed to encode JSON response", "error", err)
-	}
+	handlers.WriteJSON(w, statusCode, data)
 }
 
 // Server 表示 API 服务器
@@ -48,24 +37,18 @@ func NewServer(host string, port int) *Server {
 	// API 路由处理器
 	apiHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
-		slog.Info("API request received", "method", r.Method, "path", path, "raw_path", r.URL.RawPath)
 
 		// Projects API
 		if path == "/api/v1/projects" {
-			slog.Info("Matched /api/v1/projects", "method", r.Method)
 			if r.Method == "GET" {
-				slog.Info("Calling HandleListProjects")
 				h.HandleListProjects(w, r)
 				return
 			}
 			if r.Method == "POST" {
-				slog.Info("Calling HandleCreateProject")
 				h.HandleCreateProject(w, r)
 				return
 			}
 			slog.Warn("Method not allowed for /api/v1/projects", "method", r.Method)
-		} else {
-			slog.Debug("Path does not match /api/v1/projects", "path", path, "expected", "/api/v1/projects")
 		}
 
 		// Project Lifecycle API - open/close/connect
@@ -96,24 +79,15 @@ func NewServer(host string, port int) *Server {
 			}
 		}
 
-		// Project sessions API
-		if strings.HasPrefix(path, "/api/v1/projects/") && strings.HasSuffix(path, "/sessions") {
-			// /api/v1/projects/{project_path}/sessions
-			if r.Method == "GET" {
-				h.HandleListSessions(w, r)
-				return
-			}
-			if r.Method == "POST" {
-				h.HandleCreateSession(w, r)
-				return
-			}
-		}
-
 		// Project session detail API
-		if strings.HasPrefix(path, "/api/v1/projects/") && strings.Contains(path, "/sessions/") && !strings.Contains(path, "/messages") && !strings.HasSuffix(path, "/sessions") {
+		if strings.HasPrefix(path, "/api/v1/projects/") && strings.Contains(path, "/sessions/") && !strings.Contains(path, "/messages") && !strings.HasSuffix(path, "/sessions") && !strings.Contains(path, "/abort") {
 			// /api/v1/projects/{project_path}/sessions/{session_id}
 			if r.Method == "GET" {
 				h.HandleGetSession(w, r)
+				return
+			}
+			if r.Method == "PUT" || r.Method == "PATCH" {
+				h.HandleUpdateSession(w, r)
 				return
 			}
 			if r.Method == "DELETE" {
@@ -152,6 +126,45 @@ func NewServer(host string, port int) *Server {
 			}
 		}
 
+		// Config API - /api/v1/projects/{project_path}/config
+		if strings.HasPrefix(path, "/api/v1/projects/") && strings.HasSuffix(path, "/config") {
+			if r.Method == "GET" {
+				h.HandleGetConfig(w, r)
+				return
+			}
+		}
+
+		// Permissions API - /api/v1/projects/{project_path}/permissions
+		if strings.HasPrefix(path, "/api/v1/projects/") && strings.HasSuffix(path, "/permissions") {
+			if r.Method == "GET" {
+				h.HandleListPermissions(w, r)
+				return
+			}
+		}
+
+		// Permission Reply API - /api/v1/projects/{project_path}/permissions/{requestID}/reply
+		if strings.HasPrefix(path, "/api/v1/projects/") && strings.Contains(path, "/permissions/") && strings.HasSuffix(path, "/reply") {
+			if r.Method == "POST" {
+				h.HandleReplyPermission(w, r)
+				return
+			}
+		}
+
+		// Session Abort API - /api/v1/projects/{project_path}/sessions/{session_id}/abort
+		if strings.HasPrefix(path, "/api/v1/projects/") && strings.Contains(path, "/sessions/") && strings.HasSuffix(path, "/abort") {
+			if r.Method == "POST" {
+				h.HandleAbortSession(w, r)
+				return
+			}
+		}
+
+		// Session Status API - /api/v1/projects/{project_path}/sessions/status
+		if strings.HasPrefix(path, "/api/v1/projects/") && strings.HasSuffix(path, "/sessions/status") {
+			if r.Method == "GET" {
+				h.HandleGetSessionStatus(w, r)
+				return
+			}
+		}
 
 		WriteError(w, "NOT_FOUND", "Endpoint not found", http.StatusNotFound)
 	})
@@ -162,7 +175,6 @@ func NewServer(host string, port int) *Server {
 	
 	// 添加一个测试路由来验证路由是否工作
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		slog.Info("Health check request received", "path", r.URL.Path)
 		// 设置正确的Content-Type，因为JSONMiddleware会覆盖这个
 		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(http.StatusOK)
@@ -185,25 +197,6 @@ func NewServer(host string, port int) *Server {
 			return
 		}
 
-		// 立即输出，不等待
-		fmt.Fprintf(os.Stderr, "\n=== 请求到达 ===\n")
-		fmt.Fprintf(os.Stderr, "Method: %s\n", r.Method)
-		fmt.Fprintf(os.Stderr, "Path: %s\n", r.URL.Path)
-		fmt.Fprintf(os.Stderr, "RawPath: %s\n", r.URL.RawPath)
-		fmt.Fprintf(os.Stderr, "RequestURI: %s\n", r.RequestURI)
-		fmt.Fprintf(os.Stderr, "Host: %s\n", r.Host)
-		fmt.Fprintf(os.Stderr, "RemoteAddr: %s\n", r.RemoteAddr)
-		fmt.Fprintf(os.Stderr, "================\n\n")
-
-		slog.Info("=== 所有请求捕获 ===",
-			"method", r.Method,
-			"path", r.URL.Path,
-			"raw_path", r.URL.RawPath,
-			"host", r.Host,
-			"remote_addr", r.RemoteAddr,
-			"url", r.URL.String(),
-			"request_uri", r.RequestURI,
-		)
 		handler.ServeHTTP(w, r)
 	})
 

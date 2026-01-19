@@ -98,6 +98,18 @@ class CrushAPIClient:
             print(f"      创建时间: {session.get('created_at', 'N/A')}")
         return session
 
+    def update_session(self, project_path: str, session_id: str, title: str) -> Optional[Dict]:
+        print(f"\n[6.5] 更新会话: {title}")
+        encoded = urllib.parse.quote(project_path, safe="")
+        data = self._handle_response(self._request("PUT", f"/projects/{encoded}/sessions/{session_id}", json={"title": title}))
+        session = data.get("session")
+        if session:
+            print(f"   ✅ 会话已更新")
+            print(f"      ID: {session.get('id', 'N/A')}")
+            print(f"      新标题: {session.get('title', 'N/A')}")
+            print(f"      更新时间: {session.get('updated_at', 'N/A')}")
+        return session
+
     def send_message_sync(self, project_path: str, session_id: str, prompt: str) -> Optional[Dict]:
         print(f"\n[7] 发送消息: {prompt[:50]}...")
         encoded = urllib.parse.quote(project_path, safe="")
@@ -114,10 +126,64 @@ class CrushAPIClient:
             print(f"      内容预览: {msg.get('content', '')[:100]}...")
             print(f"      模型: {msg.get('model', 'N/A')}")
             print(f"      提供商: {msg.get('provider', 'N/A')}")
+            if msg.get('finish_reason'):
+                print(f"      完成原因: {msg.get('finish_reason', 'N/A')}")
+            if msg.get('parts'):
+                parts_count = len(msg.get('parts', []))
+                print(f"      部分数: {parts_count}")
             print(f"      创建时间: {msg.get('created_at', 'N/A')}")
             if sess:
                 print(f"      会话 Token: {sess.get('prompt_tokens', 0)} prompt + {sess.get('completion_tokens', 0)} completion")
                 print(f"      会话成本: ${sess.get('cost', 0):.6f}")
+        return data
+
+    def get_config(self, project_path: str) -> Optional[Dict]:
+        print(f"\n[8] 获取配置信息...")
+        encoded = urllib.parse.quote(project_path, safe="")
+        data = self._handle_response(self._request("GET", f"/projects/{encoded}/config"))
+        if data:
+            print(f"   ✅ 配置已获取")
+            print(f"      工作目录: {data.get('working_dir', 'N/A')}")
+            print(f"      数据目录: {data.get('data_dir', 'N/A')}")
+            print(f"      调试模式: {data.get('debug', False)}")
+            print(f"      已配置: {data.get('configured', False)}")
+            providers = data.get('providers', [])
+            if providers:
+                print(f"      提供商: {len(providers)} 个")
+                for p in providers:
+                    status = "✅" if p.get('configured') else "❌"
+                    print(f"        {status} {p.get('name', 'N/A')} ({p.get('type', 'N/A')})")
+        return data
+
+    def get_permissions(self, project_path: str) -> Optional[Dict]:
+        print(f"\n[9] 获取权限状态...")
+        encoded = urllib.parse.quote(project_path, safe="")
+        data = self._handle_response(self._request("GET", f"/projects/{encoded}/permissions"))
+        if data:
+            print(f"   ✅ 权限状态已获取")
+            print(f"      跳过请求: {data.get('skip_requests', False)}")
+            pending = data.get('pending', [])
+            print(f"      待处理请求: {len(pending)} 个")
+        return data
+
+    def abort_session(self, project_path: str, session_id: str) -> Optional[Dict]:
+        print(f"\n[10] 中止会话处理...")
+        encoded = urllib.parse.quote(project_path, safe="")
+        data = self._handle_response(self._request("POST", f"/projects/{encoded}/sessions/{session_id}/abort"))
+        if data:
+            print(f"   ✅ 会话已中止")
+            print(f"      状态: {data.get('status', 'N/A')}")
+        return data
+
+    def get_session_status(self, project_path: str) -> Optional[Dict]:
+        print(f"\n[11] 获取会话状态...")
+        encoded = urllib.parse.quote(project_path, safe="")
+        data = self._handle_response(self._request("GET", f"/projects/{encoded}/sessions/status"))
+        if data:
+            print(f"   ✅ 状态已获取")
+            print(f"      总会话数: {data.get('total_sessions', 0)}")
+            print(f"      应用已配置: {data.get('app_configured', False)}")
+            print(f"      Agent 就绪: {data.get('agent_ready', False)}")
         return data
 
     def subscribe_events(self, project_path: str, callback=None, duration: int = 5):
@@ -207,7 +273,8 @@ def run_test(base_url: str, project_path: str):
                         parts = data.get("parts", [])
                         for part in parts:
                             if isinstance(part, dict) and part.get("type") == "text":
-                                content = part.get("data", {}).get("text", "")
+                                # 新的 parts 格式：{"type": "text", "text": "..."}
+                                content = part.get("text", "") or part.get("data", {}).get("text", "")
                                 break
                     
                     print(f"      消息 ID: {msg_id}...")
@@ -267,8 +334,23 @@ def run_test(base_url: str, project_path: str):
             print("❌ 无法创建会话")
             return
 
+        # 6.5. 更新会话（测试新功能）
+        client.update_session(project_path, session["id"], f"更新后的会话标题 - {time.strftime('%H:%M:%S')}")
+
         # 7. 发送消息（会触发更多事件）
         message_response = client.send_message_sync(project_path, session["id"], "请用一句话介绍 Go 语言")
+
+        # 8. 获取配置信息
+        client.get_config(project_path)
+
+        # 9. 获取权限状态
+        client.get_permissions(project_path)
+
+        # 10. 获取会话状态
+        client.get_session_status(project_path)
+
+        # 11. 测试中止会话（如果有正在进行的任务）
+        # client.abort_session(project_path, session["id"])
 
         # 等待一段时间让事件处理完成
         time.sleep(2)
@@ -280,7 +362,7 @@ def run_test(base_url: str, project_path: str):
 
     except requests.exceptions.ConnectionError:
         print("\n❌ 无法连接到服务器")
-        print("请运行: crush --server")
+        print("请运行: crush serve")
         sys.exit(1)
     except KeyboardInterrupt:
         print("\n\n测试被中断")

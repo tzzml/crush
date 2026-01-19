@@ -615,13 +615,13 @@ func (s *splashCmp) View() string {
 		)
 
 		yesButton := core.SelectableButton(core.ButtonOpts{
-			Text:           "Yep!",
+			Text:           "Yes!",
 			UnderlineIndex: 0,
 			Selected:       !s.selectedNo,
 		})
 
 		noButton := core.SelectableButton(core.ButtonOpts{
-			Text:           "Nope",
+			Text:           "No",
 			UnderlineIndex: 0,
 			Selected:       s.selectedNo,
 		})

@@ -46,6 +46,26 @@ class CrushClient:
         encoded = requests.utils.quote(project_path, safe="")
         return self._post(f"/projects/{encoded}/sessions/{session_id}/messages", {"prompt": prompt})
 
+    def get_config(self, project_path: str) -> Dict[str, Any]:
+        """获取配置"""
+        encoded = requests.utils.quote(project_path, safe="")
+        return self._get(f"/projects/{encoded}/config")
+
+    def get_permissions(self, project_path: str) -> Dict[str, Any]:
+        """获取权限状态"""
+        encoded = requests.utils.quote(project_path, safe="")
+        return self._get(f"/projects/{encoded}/permissions")
+
+    def abort_session(self, project_path: str, session_id: str) -> Dict[str, Any]:
+        """中止会话"""
+        encoded = requests.utils.quote(project_path, safe="")
+        return self._post(f"/projects/{encoded}/sessions/{session_id}/abort")
+
+    def get_session_status(self, project_path: str) -> Dict[str, Any]:
+        """获取会话状态"""
+        encoded = requests.utils.quote(project_path, safe="")
+        return self._get(f"/projects/{encoded}/sessions/status")
+
     def subscribe_events(self, project_path: str, callback=None):
         """订阅 SSE 事件"""
         encoded = requests.utils.quote(project_path, safe="")
@@ -113,7 +133,8 @@ def main():
                         parts = data.get("parts", [])
                         for part in parts:
                             if isinstance(part, dict) and part.get("type") == "text":
-                                content = part.get("data", {}).get("text", "")
+                                # 新的 parts 格式：{"type": "text", "text": "..."}
+                                content = part.get("text", "") or part.get("data", {}).get("text", "")
                                 break
                     
                     print(f"      消息 ID: {msg_id}...")
@@ -161,6 +182,29 @@ def main():
         print(f"      内容预览: {msg_data.get('content', '')[:100]}...")
         if sess_data:
             print(f"      会话 Token: {sess_data.get('prompt_tokens', 0)} prompt + {sess_data.get('completion_tokens', 0)} completion")
+
+        # 获取配置信息
+        print("⚙️  获取配置...")
+        config = client.get_config(project_path)
+        if config:
+            print(f"   ✅ 配置已获取")
+            print(f"      工作目录: {config.get('working_dir', 'N/A')}")
+            print(f"      已配置: {config.get('configured', False)}")
+
+        # 获取权限状态
+        print("🔐 获取权限状态...")
+        perms = client.get_permissions(project_path)
+        if perms:
+            print(f"   ✅ 权限状态已获取")
+            print(f"      跳过请求: {perms.get('skip_requests', False)}")
+
+        # 获取会话状态
+        print("📊 获取会话状态...")
+        status = client.get_session_status(project_path)
+        if status:
+            print(f"   ✅ 状态已获取")
+            print(f"      总会话数: {status.get('total_sessions', 0)}")
+            print(f"      Agent 就绪: {status.get('agent_ready', False)}")
 
         # 等待事件处理
         time.sleep(3)

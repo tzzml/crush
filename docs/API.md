@@ -2,30 +2,34 @@
 
 ## 概述
 
-Crush REST API 提供了程序化的方式来管理项目、会话和消息。当使用 `--server` 标志启动时，程序会启动一个 HTTP API 服务器而不是交互式 TUI。
+Crush REST API 提供了程序化的方式来管理项目、会话和消息。当使用 `serve` 子命令启动时，程序会启动一个 HTTP API 服务器而不是交互式 TUI。
 
 ## 启动 API 服务器
 
 ```bash
 # 启动 API 服务器（默认端口 8080，监听 localhost）
-crush --server
+crush serve
 
 # 指定端口和地址
-crush --server --port 3000 --host 0.0.0.0
+crush serve --port 3000 --host 0.0.0.0
 
 # 指定工作目录和数据目录
-crush --server -c /path/to/project -D /path/to/data
+crush serve -c /path/to/project -D /path/to/data
 ```
 
 ### 命令行参数
 
-- `--server`: 启动 API 服务器模式
-- `--port` / `-p`: API 服务器端口（默认: 8080）
+**serve 子命令参数**：
+- `--port`: API 服务器端口（默认: 8080）
 - `--host`: 监听地址（默认: localhost）
+
+**全局参数**（适用于所有命令）：
 - `--cwd` / `-c`: 当前工作目录
 - `--data-dir` / `-D`: 自定义数据目录
 - `--debug` / `-d`: 启用调试日志
 - `--yolo` / `-y`: 自动接受所有权限请求（危险模式）
+
+**注意**：`--server` 标志已废弃，建议使用 `crush serve` 子命令。
 
 ## API 基础信息
 
@@ -288,7 +292,51 @@ GET /api/v1/projects/{project_path}/sessions/{session_id}
 }
 ```
 
-#### 2.4 删除会话
+#### 2.4 更新会话
+
+```http
+PUT /api/v1/projects/{project_path}/sessions/{session_id}
+PATCH /api/v1/projects/{project_path}/sessions/{session_id}
+Content-Type: application/json
+```
+
+**路径参数**：
+- `project_path`: 项目的路径（需要 URL 编码）
+- `session_id`: 会话的唯一标识符
+
+**请求体**：
+
+```json
+{
+  "title": "Updated session title"
+}
+```
+
+**响应示例**：
+
+```json
+{
+  "session": {
+    "id": "session-uuid-1",
+    "parent_session_id": null,
+    "title": "Updated session title",
+    "message_count": 10,
+    "prompt_tokens": 150,
+    "completion_tokens": 500,
+    "cost": 0.0025,
+    "summary_message_id": null,
+    "todos": [],
+    "created_at": 1705312200000,
+    "updated_at": 1705312400000
+  }
+}
+```
+
+**说明**：
+- 目前只支持更新 `title` 字段
+- 使用 PUT 或 PATCH 方法都可以
+
+#### 2.5 删除会话
 
 ```http
 DELETE /api/v1/projects/{project_path}/sessions/{session_id}
@@ -303,6 +351,53 @@ DELETE /api/v1/projects/{project_path}/sessions/{session_id}
 ```json
 {
   "message": "Session deleted successfully"
+}
+```
+
+#### 2.6 中止会话 AI 处理
+
+中止正在进行的 AI 处理任务。
+
+```http
+POST /api/v1/projects/{project_path}/sessions/{session_id}/abort
+Content-Type: application/json
+```
+
+**路径参数**：
+- `project_path`: 项目的路径（需要 URL 编码）
+- `session_id`: 会话的唯一标识符
+
+**响应示例**：
+
+```json
+{
+  "status": "aborted",
+  "session_id": "session-uuid-1"
+}
+```
+
+**说明**：
+- 此操作会取消该会话中所有正在进行的 AI 处理任务
+- 如果会话没有正在进行的任务，操作仍然会成功
+
+#### 2.7 获取会话状态统计
+
+获取项目的会话状态统计信息。
+
+```http
+GET /api/v1/projects/{project_path}/sessions/status
+```
+
+**路径参数**：
+- `project_path`: 项目的路径（需要 URL 编码）
+
+**响应示例**：
+
+```json
+{
+  "total_sessions": 10,
+  "app_configured": true,
+  "agent_ready": true
 }
 ```
 
@@ -332,12 +427,24 @@ GET /api/v1/projects/{project_path}/sessions/{session_id}/messages
       "session_id": "session-uuid-1",
       "role": "user",
       "content": "Explain the use of context in Go",
-      "model": "gpt-4",
-      "provider": "openai",
+      "model": null,
+      "provider": null,
       "is_summary_message": false,
       "created_at": 1705312200000,
       "updated_at": 1705312200000,
-      "finished_at": 1705312201000
+      "finished_at": 1705312201000,
+      "finish_reason": "stop",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Explain the use of context in Go"
+        },
+        {
+          "type": "finish",
+          "reason": "stop",
+          "time": 1705312201000
+        }
+      ]
     },
     {
       "id": "message-uuid-2",
@@ -349,7 +456,19 @@ GET /api/v1/projects/{project_path}/sessions/{session_id}/messages
       "is_summary_message": false,
       "created_at": 1705312201000,
       "updated_at": 1705312205000,
-      "finished_at": 1705312205000
+      "finished_at": 1705312205000,
+      "finish_reason": "end_turn",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Context in Go is a powerful mechanism..."
+        },
+        {
+          "type": "finish",
+          "reason": "end_turn",
+          "time": 1705312205000
+        }
+      ]
     }
   ],
   "total": 10
@@ -358,8 +477,10 @@ GET /api/v1/projects/{project_path}/sessions/{session_id}/messages
 
 **说明**：
 - 消息按 `created_at` 升序排列（最早的在前）
-- `content` 字段包含完整的消息内容
+- `content` 字段包含完整的消息内容（文本部分）
+- `parts` 字段包含消息的所有部分（text, reasoning, tool_call, tool_result, finish 等）
 - `finished_at` 为 null 表示消息还在生成中
+- `finish_reason` 表示消息完成的原因（如 "end_turn", "max_tokens", "tool_use" 等）
 
 #### 3.2 发送消息并运行 AI（同步）
 
@@ -395,7 +516,19 @@ Content-Type: application/json
     "is_summary_message": false,
     "created_at": 1705312400000,
     "updated_at": 1705312405000,
-    "finished_at": 1705312405000
+    "finished_at": 1705312405000,
+    "finish_reason": "end_turn",
+    "parts": [
+      {
+        "type": "text",
+        "text": "Context in Go is a powerful mechanism for..."
+      },
+      {
+        "type": "finish",
+        "reason": "end_turn",
+        "time": 1705312405000
+      }
+    ]
   },
   "session": {
     "id": "session-uuid-1",
@@ -486,14 +619,140 @@ GET /api/v1/projects/{project_path}/messages/{message_id}
     "is_summary_message": false,
     "created_at": 1705312200000,
     "updated_at": 1705312200000,
-    "finished_at": 1705312200000
+    "finished_at": 1705312200000,
+    "finish_reason": null,
+    "parts": [
+      {
+        "type": "text",
+        "text": "Explain the use of context in Go"
+      },
+      {
+        "type": "finish",
+        "reason": "stop",
+        "time": 1705312200000
+      }
+    ]
   }
 }
 ```
 
-### 4. Events（实时事件订阅）
+### 4. Config（配置管理）
 
-#### 4.1 订阅项目实时事件
+#### 4.1 获取项目配置
+
+获取项目的配置信息，包括工作目录、数据目录、调试模式状态和提供商配置。
+
+```http
+GET /api/v1/projects/{project_path}/config
+```
+
+**路径参数**：
+- `project_path`: 项目的路径（需要 URL 编码）
+
+**前置条件**：
+- 项目必须已通过 `POST /api/v1/projects/{project_path}/open` 打开
+
+**响应示例**：
+
+```json
+{
+  "working_dir": "/path/to/project",
+  "data_dir": "/home/user/.crush/project",
+  "debug": false,
+  "configured": true,
+  "providers": [
+    {
+      "name": "openai",
+      "type": "openai",
+      "configured": true
+    },
+    {
+      "name": "anthropic",
+      "type": "anthropic",
+      "configured": false
+    }
+  ]
+}
+```
+
+**说明**：
+- `configured`: 表示项目是否已配置 AI 提供商
+- `providers`: 提供商列表，不包含敏感的 API Key 信息
+- 只有已配置的提供商才会显示 `configured: true`
+
+### 5. Permissions（权限管理）
+
+#### 5.1 获取权限服务状态
+
+获取权限服务的当前状态。
+
+```http
+GET /api/v1/projects/{project_path}/permissions
+```
+
+**路径参数**：
+- `project_path`: 项目的路径（需要 URL 编码）
+
+**前置条件**：
+- 项目必须已通过 `POST /api/v1/projects/{project_path}/open` 打开
+
+**响应示例**：
+
+```json
+{
+  "skip_requests": false,
+  "pending": []
+}
+```
+
+**说明**：
+- `skip_requests`: 是否跳过权限请求（在 `--yolo` 模式下为 `true`）
+- `pending`: 待处理的权限请求列表（当前为简化实现，可能为空）
+
+#### 5.2 回复权限请求
+
+批准或拒绝一个权限请求。
+
+```http
+POST /api/v1/projects/{project_path}/permissions/{request_id}/reply
+Content-Type: application/json
+```
+
+**路径参数**：
+- `project_path`: 项目的路径（需要 URL 编码）
+- `request_id`: 权限请求的唯一标识符
+
+**请求体**：
+
+```json
+{
+  "granted": true,
+  "persistent": false
+}
+```
+
+**参数说明**：
+- `granted` (必需): `true` 表示批准，`false` 表示拒绝
+- `persistent` (可选): `true` 表示持久化权限（记住此决定），默认为 `false`
+
+**响应示例**：
+
+```json
+{
+  "status": "replied",
+  "request_id": "permission-uuid-1",
+  "granted": "true"
+}
+```
+
+**说明**：
+- 权限请求通常在 AI 工具需要执行某些操作时自动创建
+- 可以通过订阅事件（SSE）来接收权限请求通知
+- 持久化权限会在后续相同操作时自动批准
+
+### 6. Events（实时事件订阅）
+
+#### 6.1 订阅项目实时事件
 
 订阅指定项目的实时事件，包括会话和消息的创建、更新、删除等。
 
@@ -548,29 +807,6 @@ data: {"type": "deleted", "payload": {"id": "session-uuid-1", ...}}
 - 只接收指定项目的事件，不会收到其他项目的事件
 - 建议客户端实现重连机制以处理网络中断
 
-**路径参数**：
-- `project_path`: 项目的路径（需要 URL 编码）
-- `message_id`: 消息的唯一标识符
-
-**响应示例**：
-
-```json
-{
-  "message": {
-    "id": "message-uuid-1",
-    "session_id": "session-uuid-1",
-    "role": "user",
-    "content": "Explain the use of context in Go",
-    "model": null,
-    "provider": null,
-    "is_summary_message": false,
-    "created_at": 1705312200000,
-    "updated_at": 1705312200000,
-    "finished_at": 1705312200000
-  }
-}
-```
-
 ## 使用示例
 
 ### 完整工作流示例
@@ -578,7 +814,7 @@ data: {"type": "deleted", "payload": {"id": "session-uuid-1", ...}}
 #### 1. 启动 API 服务器
 
 ```bash
-crush --server --port 8080
+crush serve --port 8080
 ```
 
 #### 2. 注册项目
@@ -682,27 +918,43 @@ event: updated
 data: {"type": "updated", "payload": {"id": "message-456", "content": "Hello"}}
 ```
 
-#### 10. 关闭项目（可选）
+#### 9. 获取配置信息
 
 ```bash
-curl -X POST "http://localhost:8080/api/v1/projects/%2Fpath%2Fto%2Fmy%2Fproject/close" \
-  -H "Content-Type: application/json" \
-  -d '{}'
+curl "http://localhost:8080/api/v1/projects/%2Fpath%2Fto%2Fmy%2Fproject/config"
 ```
 
 响应：
 ```json
 {
-  "project_path": "/path/to/my/project",
-  "status": "closed"
+  "working_dir": "/path/to/my/project",
+  "data_dir": "/home/user/.crush/project",
+  "debug": false,
+  "configured": true,
+  "providers": [...]
 }
 ```
 
+#### 10. 获取权限状态
+
 ```bash
-curl "http://localhost:8080/api/v1/projects/%2Fpath%2Fto%2Fmy%2Fproject/sessions"
+curl "http://localhost:8080/api/v1/projects/%2Fpath%2Fto%2Fmy%2Fproject/permissions"
 ```
 
-#### 9. 订阅实时事件（SSE）
+#### 11. 中止会话处理
+
+```bash
+curl -X POST "http://localhost:8080/api/v1/projects/%2Fpath%2Fto%2Fmy%2Fproject/sessions/abc-123-def/abort" \
+  -H "Content-Type: application/json"
+```
+
+#### 12. 获取会话状态
+
+```bash
+curl "http://localhost:8080/api/v1/projects/%2Fpath%2Fto%2Fmy%2Fproject/sessions/status"
+```
+
+#### 13. 订阅实时事件（SSE）
 
 ```bash
 curl -N "http://localhost:8080/api/v1/projects/%2Fpath%2Fto%2Fmy%2Fproject/events" \
@@ -721,7 +973,7 @@ event: updated
 data: {"type": "updated", "payload": {"id": "message-456", "content": "Hello"}}
 ```
 
-#### 10. 关闭项目（可选）
+#### 14. 关闭项目（可选）
 
 ```bash
 curl -X POST "http://localhost:8080/api/v1/projects/%2Fpath%2Fto%2Fmy%2Fproject/close" \
@@ -921,15 +1173,18 @@ for chunk in send_message_stream(session["id"], "Hello!"):
 
 - `PROJECT_NOT_FOUND`: 项目不存在
 - `APP_NOT_OPENED`: 项目的 app 实例未打开（需要先调用 open API）
-
-**注意**：
-- `open` 和 `close` 操作是幂等的：重复调用不会报错，会直接返回成功
 - `SESSION_NOT_FOUND`: 会话不存在
 - `MESSAGE_NOT_FOUND`: 消息不存在
 - `INVALID_PROJECT_PATH`: 项目路径无效
 - `PROVIDER_NOT_CONFIGURED`: AI 提供商未配置
 - `INVALID_REQUEST`: 请求参数无效
 - `INTERNAL_ERROR`: 服务器内部错误
+- `CONFIG_NOT_FOUND`: 配置不存在
+- `REQUEST_CANCELLED`: 请求被取消
+- `TIMEOUT`: 请求超时
+
+**注意**：
+- `open` 和 `close` 操作是幂等的：重复调用不会报错，会直接返回成功
 
 ### 错误响应示例
 
