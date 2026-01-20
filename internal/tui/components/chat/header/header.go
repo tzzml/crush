@@ -62,7 +62,7 @@ func (h *header) View() string {
 
 	const (
 		gap          = " "
-		diag         = "╱"
+		diag         = "•"
 		minDiags     = 3
 		leftPadding  = 1
 		rightPadding = 1

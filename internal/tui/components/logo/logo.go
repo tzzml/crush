@@ -76,7 +76,9 @@ func Render(version string, compact bool, o Opts) string {
 	// Narrow version.
 	if compact {
 		field := fg(o.FieldColor, strings.Repeat(diag, crushWidth))
-		return strings.Join([]string{field, field, crush, field, ""}, "\n")
+		_ = field
+		// return strings.Join([]string{field, field, crush, field, ""}, "\n")
+		return "Zork Agent V1.0.0"
 	}
 
 	fieldHeight := lipgloss.Height(crush)
@@ -114,6 +116,8 @@ func Render(version string, compact bool, o Opts) string {
 		}
 		logo = strings.Join(lines, "\n")
 	}
+
+	logo = "Zork™ Zork Agent V1.0.0"
 	return logo
 }
 
@@ -128,6 +132,7 @@ func SmallRender(width int) string {
 		lines := strings.Repeat("•", remainingWidth)
 		title = fmt.Sprintf("%s %s", title, t.S().Base.Foreground(t.Primary).Render(lines))
 	}
+	title = "Zork Agent"
 	return title
 }
 
