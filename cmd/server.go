@@ -19,6 +19,21 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// @title           Zork Agent API
+// @version         1.0
+// @description     AI 项目管理 API 服务
+// @termsOfService  http://swagger.io/terms/
+
+// @contact.name   API Support
+// @contact.url    http://www.swagger.io/support
+// @contact.email  support@swagger.io
+
+// @license.name  Apache 2.0
+// @license.url   http://www.apache.org/licenses/LICENSE-2.0.html
+
+// @host      localhost:8080
+// @BasePath  /
+
 // multiHandler 实现 slog.Handler 接口，同时将日志写入多个 handler
 type multiHandler struct {
 	handlers []slog.Handler
@@ -195,6 +210,11 @@ func StartServer(cmd *cobra.Command, port int, host string) {
 	defer shutdownCancel()
 
 	if err := server.Shutdown(shutdownCtx); err != nil {
-		slog.Error("Error shutting down server", "error", err)
+		// Hertz Shutdown may return an error even on graceful shutdown
+		// Only log if it's not a context error or http.ErrServerClosed
+		if err != nil && err != context.DeadlineExceeded && err != context.Canceled {
+			slog.Error("Error shutting down server", "error", err)
+		}
 	}
+	slog.Info("API server shutdown complete")
 }

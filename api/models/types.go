@@ -45,14 +45,20 @@ type CreateProjectResponse struct {
 
 // Project Lifecycle API
 
-type OpenProjectResponse struct {
-	ProjectPath string `json:"project_path"`
-	Status      string `json:"status"`
+type CurrentProjectResponse struct {
+	Project *ProjectResponse `json:"project"`
 }
 
-type CloseProjectResponse struct {
+type DisposeProjectResponse struct {
 	ProjectPath string `json:"project_path"`
 	Status      string `json:"status"`
+	Message     string `json:"message"`
+}
+
+type DisposeAllResponse struct {
+	DisposedCount int      `json:"disposed_count"`
+	Projects      []string `json:"projects"`
+	Status        string   `json:"status"`
 }
 
 // Sessions API

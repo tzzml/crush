@@ -7,7 +7,7 @@ import (
 	"os"
 	"sync"
 
-	"github.com/charmbracelet/crush/internal/app"
+	internalapp "github.com/charmbracelet/crush/internal/app"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/db"
 	"github.com/charmbracelet/crush/internal/projects"
@@ -15,29 +15,20 @@ import (
 
 // AppManager 管理不同项目的 app 实例
 type AppManager struct {
-	apps map[string]*app.App
+	apps map[string]*internalapp.App
 	mu   sync.RWMutex
 }
 
 var globalAppManager = &AppManager{
-	apps: make(map[string]*app.App),
+	apps: make(map[string]*internalapp.App),
 }
 
-// Open 创建并启动项目的 app 实例（幂等性：如果已打开则直接返回成功）
-func (h *Handlers) Open(ctx context.Context, projectPath string) error {
-	globalAppManager.mu.Lock()
-	defer globalAppManager.mu.Unlock()
-
-	// 检查是否已经打开（幂等性：如果已打开则直接返回成功）
-	if _, ok := globalAppManager.apps[projectPath]; ok {
-		slog.Info("Project app instance already open, returning success", "project", projectPath)
-		return nil
-	}
-
+// createAppInstance 创建 app 实例的辅助方法
+func (am *AppManager) createAppInstance(ctx context.Context, projectPath string) (*internalapp.App, error) {
 	// 获取项目信息
 	projectList, err := projects.List()
 	if err != nil {
-		return fmt.Errorf("failed to list projects: %w", err)
+		return nil, fmt.Errorf("failed to list projects: %w", err)
 	}
 
 	var project *projects.Project
@@ -49,74 +40,90 @@ func (h *Handlers) Open(ctx context.Context, projectPath string) error {
 	}
 
 	if project == nil {
-		return fmt.Errorf("project not found: %s", projectPath)
+		return nil, fmt.Errorf("project not found: %s", projectPath)
 	}
 
 	// 加载配置
 	cfg, err := config.Load(project.Path, project.DataDir, false)
 	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
+		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
 
 	// 确保数据目录存在
 	if err := os.MkdirAll(project.DataDir, 0o755); err != nil {
-		return fmt.Errorf("failed to create data directory: %w", err)
+		return nil, fmt.Errorf("failed to create data directory: %w", err)
 	}
 
 	// 连接数据库
 	conn, err := db.Connect(ctx, project.DataDir)
 	if err != nil {
-		return fmt.Errorf("failed to connect to database: %w", err)
+		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
 
 	// 创建 app 实例
-	appInstance, err := app.New(ctx, conn, cfg)
+	appInstance, err := internalapp.New(ctx, conn, cfg)
 	if err != nil {
 		conn.Close()
-		return fmt.Errorf("failed to create app instance: %w", err)
+		return nil, fmt.Errorf("failed to create app instance: %w", err)
 	}
 
-	globalAppManager.apps[projectPath] = appInstance
-	slog.Info("Opened project app instance", "project", projectPath)
-
-	return nil
+	return appInstance, nil
 }
 
-// Close 关闭并清理项目的 app 实例（幂等性：如果已关闭则直接返回成功）
-func (h *Handlers) Close(ctx context.Context, projectPath string) error {
+// DisposeProject 释放单个项目的 app 实例（幂等性：如果已释放则直接返回成功）
+func (h *Handlers) DisposeProject(ctx context.Context, projectPath string) error {
 	globalAppManager.mu.Lock()
 	defer globalAppManager.mu.Unlock()
 
 	appInstance, ok := globalAppManager.apps[projectPath]
 	if !ok {
-		// 幂等性：如果已经关闭，直接返回成功
-		slog.Info("Project app instance already closed, returning success", "project", projectPath)
+		// 幂等性：如果已经释放，直接返回成功
+		slog.Info("Project app instance already disposed", "project", projectPath)
 		return nil
 	}
 
 	// 关闭 app 实例
 	appInstance.Shutdown()
 	delete(globalAppManager.apps, projectPath)
-	slog.Info("Closed project app instance", "project", projectPath)
+	slog.Info("Disposed project app instance", "project", projectPath)
 
 	return nil
 }
 
-// GetAppForProject 获取已打开的 app 实例（如果未打开则返回错误）
-func (h *Handlers) GetAppForProject(ctx context.Context, projectPath string) (*app.App, error) {
+// GetAppForProject 获取项目的 app 实例（如果不存在则自动创建）
+func (h *Handlers) GetAppForProject(ctx context.Context, projectPath string) (*internalapp.App, error) {
+	// Fast path: read lock to check if already exists
 	globalAppManager.mu.RLock()
-	defer globalAppManager.mu.RUnlock()
-
 	appInstance, ok := globalAppManager.apps[projectPath]
-	if !ok {
-		return nil, fmt.Errorf("app instance not open for project: %s (call open first)", projectPath)
+	globalAppManager.mu.RUnlock()
+
+	if ok {
+		return appInstance, nil
 	}
+
+	// Slow path: acquire write lock and create
+	globalAppManager.mu.Lock()
+	defer globalAppManager.mu.Unlock()
+
+	// Double-check pattern: another goroutine might have created it while we waited
+	if appInstance, ok := globalAppManager.apps[projectPath]; ok {
+		return appInstance, nil
+	}
+
+	// Auto-create the instance
+	appInstance, err := globalAppManager.createAppInstance(ctx, projectPath)
+	if err != nil {
+		return nil, err
+	}
+
+	globalAppManager.apps[projectPath] = appInstance
+	slog.Info("Auto-created project app instance", "project", projectPath)
 
 	return appInstance, nil
 }
 
 // GetAppForSession 通过会话ID查找对应的app实例
-func (h *Handlers) GetAppForSession(ctx context.Context, sessionID string) (*app.App, error) {
+func (h *Handlers) GetAppForSession(ctx context.Context, sessionID string) (*internalapp.App, error) {
 	globalAppManager.mu.RLock()
 	defer globalAppManager.mu.RUnlock()
 
@@ -132,14 +139,20 @@ func (h *Handlers) GetAppForSession(ctx context.Context, sessionID string) (*app
 	return nil, fmt.Errorf("session not found in any project")
 }
 
-// Cleanup 清理所有 app 实例
-func (h *Handlers) Cleanup() {
+// DisposeAll 释放所有项目的 app 实例
+func (h *Handlers) DisposeAll(ctx context.Context) ([]string, error) {
 	globalAppManager.mu.Lock()
 	defer globalAppManager.mu.Unlock()
 
-	for path, app := range globalAppManager.apps {
-		app.Shutdown()
+	disposedProjects := make([]string, 0, len(globalAppManager.apps))
+
+	for path, appInstance := range globalAppManager.apps {
+		appInstance.Shutdown()
+		disposedProjects = append(disposedProjects, path)
 		slog.Info("Shutdown app instance", "path", path)
 	}
-	globalAppManager.apps = make(map[string]*app.App)
+
+	globalAppManager.apps = make(map[string]*internalapp.App)
+
+	return disposedProjects, nil
 }

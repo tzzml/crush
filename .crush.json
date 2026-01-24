@@ -1,0 +1,39 @@
+{
+  "$schema": "https://charm.sh/crush.json",
+
+  "providers": {
+    "anthropic": {
+      "api_key": "$ANTHROPIC_API_KEY",
+      "system_prompt_prefix": "你现在是运维 Agent（Ops），专注于运维任务。\n\n核心规则：\n1. 你的职责是执行脚本、分析日志、排查故障\n2. 你不能编辑代码（edit, multiedit, write 工具已禁用）\n3. 优先使用运维 Skills（ES、Kafka 等）\n4. 执行脚本前必须向用户说明\n\n"
+    }
+  },
+
+  "options": {
+    "disabled_tools": ["edit", "multiedit", "write", "agent", "agentic_fetch"],
+    "context_paths": [
+      ".ops-rules",
+      "AGENTS.md",
+      ".cursorrules"
+    ],
+    "skills_paths": [
+      "~/.config/crush/skills",
+      "./skills"
+    ]
+  },
+
+  "permissions": {
+    "allowed_tools": [
+      "view",
+      "ls",
+      "grep",
+      "glob"
+    ]
+  },
+
+  "models": {
+    "large": {
+      "model": "claude-sonnet-4-20250514",
+      "provider": "anthropic"
+    }
+  }
+}

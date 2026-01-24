@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"net/http"
-	"net/url"
 	"reflect"
 	"strings"
 	"sync"
@@ -15,53 +13,64 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/crush/api/models"
 	"github.com/charmbracelet/crush/internal/pubsub"
-	"github.com/charmbracelet/crush/internal/app"
+	internalapp "github.com/charmbracelet/crush/internal/app"
 	"github.com/charmbracelet/crush/internal/message"
 	"github.com/charmbracelet/crush/internal/session"
+	hertzapp "github.com/cloudwego/hertz/pkg/app"
+	"github.com/cloudwego/hertz/pkg/protocol/consts"
 )
 
 // HandleSSE 处理 Server-Sent Events 请求
-func (h *Handlers) HandleSSE(w http.ResponseWriter, r *http.Request) {
-	// 从 URL 中提取项目路径
-	projectPath, err := extractProjectPathFromEvents(r)
-	if err != nil {
-		WriteError(w, "INVALID_REQUEST", "Failed to extract project path: "+err.Error(), http.StatusBadRequest)
+//
+//	@Summary		服务器发送事件
+//	@Description	订阅项目的实时事件流
+//	@Tags			Event
+//	@Accept			json
+//	@Produce		text/event-stream
+//	@Param			directory	query		string	true	"项目路径"
+//	@Success		200		{string}	string	"Event stream"
+//	@Failure		400		{object}	map[string]interface{}
+//	@Failure		404		{object}	map[string]interface{}
+//	@Router			/event [get]
+func (h *Handlers) HandleSSE(c context.Context, ctx *hertzapp.RequestContext) {
+	// 从查询参数中获取项目路径
+	projectPath := string(ctx.Query("directory"))
+	if projectPath == "" {
+		WriteError(c, ctx, "MISSING_DIRECTORY_PARAM", "Directory query parameter is required", consts.StatusBadRequest)
 		return
 	}
 
-	slog.Info("SSE connection established", "remote_addr", r.RemoteAddr, "project", projectPath)
+	remoteAddr := string(ctx.GetHeader("X-Real-IP"))
+	if remoteAddr == "" {
+		remoteAddr = ctx.RemoteAddr().String()
+	}
+
+	slog.Info("SSE connection established", "remote_addr", remoteAddr, "project", projectPath)
 
 	// 获取项目的 app 实例
-	appInstance, err := h.GetAppForProject(r.Context(), projectPath)
+	appInstance, err := h.GetAppForProject(c, projectPath)
 	if err != nil {
-		if strings.Contains(err.Error(), "not open") {
-			WriteError(w, "APP_NOT_OPENED", "Project app instance is not open. Call open first: "+err.Error(), http.StatusBadRequest)
+		if strings.Contains(err.Error(), "project not found") {
+			WriteError(c, ctx, "PROJECT_NOT_FOUND", err.Error(), consts.StatusNotFound)
 			return
 		}
-		WriteError(w, "PROJECT_NOT_FOUND", "Failed to get app for project: "+err.Error(), http.StatusNotFound)
+		WriteError(c, ctx, "INTERNAL_ERROR", "Failed to get or create app for project: "+err.Error(), consts.StatusInternalServerError)
 		return
 	}
 
 	// 设置SSE头
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Headers", "Cache-Control")
-
-	// 获取flusher用于实时推送
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		WriteError(w, "UNSUPPORTED", "Streaming unsupported", http.StatusInternalServerError)
-		return
-	}
+	ctx.SetContentType("text/event-stream")
+	ctx.Response.Header.Set("Cache-Control", "no-cache")
+	ctx.Response.Header.Set("Connection", "keep-alive")
+	ctx.Response.Header.Set("Access-Control-Allow-Origin", "*")
+	ctx.Response.Header.Set("Access-Control-Allow-Headers", "Cache-Control")
 
 	// 创建事件通道，只订阅指定项目的 app 实例事件
-	eventCh := h.createEventChannelForProject(r.Context(), appInstance)
+	eventCh := h.createEventChannelForProject(c, appInstance)
 
 	// 发送初始连接确认
-	fmt.Fprintf(w, "event: connected\ndata: {\"status\": \"connected\"}\n\n")
-	flusher.Flush()
+	ctx.Response.SetBodyString("event: connected\ndata: {\"status\": \"connected\"}\n\n")
+	ctx.Flush()
 
 	// 创建心跳定时器
 	heartbeat := time.NewTicker(30 * time.Second)
@@ -69,22 +78,22 @@ func (h *Handlers) HandleSSE(w http.ResponseWriter, r *http.Request) {
 
 	for {
 		select {
-		case <-r.Context().Done():
-			slog.Info("SSE connection closed by client", "remote_addr", r.RemoteAddr)
+		case <-c.Done():
+			slog.Info("SSE connection closed by client", "remote_addr", remoteAddr)
 			return
 		case <-heartbeat.C:
 			// 发送心跳保持连接
-			fmt.Fprintf(w, ": heartbeat\n\n")
-			flusher.Flush()
+			ctx.Response.SetBodyString(": heartbeat\n\n")
+			ctx.Flush()
 		case event, ok := <-eventCh:
 			if !ok {
-				slog.Info("Event channel closed", "remote_addr", r.RemoteAddr)
+				slog.Info("Event channel closed", "remote_addr", remoteAddr)
 				return
 			}
 
 			// 处理不同类型的事件
-			if err := h.handleSSEEvent(w, flusher, event); err != nil {
-				slog.Error("Failed to handle SSE event", "error", err, "remote_addr", r.RemoteAddr)
+			if err := h.handleSSEEvent(ctx, event); err != nil {
+				slog.Error("Failed to handle SSE event", "error", err, "remote_addr", remoteAddr)
 				return
 			}
 		}
@@ -92,13 +101,13 @@ func (h *Handlers) HandleSSE(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleSSEEvent 处理单个SSE事件
-func (h *Handlers) handleSSEEvent(w http.ResponseWriter, flusher http.Flusher, event tea.Msg) error {
+func (h *Handlers) handleSSEEvent(ctx *hertzapp.RequestContext, event tea.Msg) error {
 	var eventType string
 	var eventData interface{}
 
 	// 处理不同类型的事件
 	switch e := event.(type) {
-	case pubsub.Event[app.LSPEvent]:
+	case pubsub.Event[internalapp.LSPEvent]:
 		eventType = string(e.Type)
 		eventData = e.Payload
 	case pubsub.Event[message.Message]:
@@ -118,14 +127,14 @@ func (h *Handlers) handleSSEEvent(w http.ResponseWriter, flusher http.Flusher, e
 	data, err := json.Marshal(eventData)
 	if err != nil {
 		// 如果序列化失败，发送简单的事件
-		fmt.Fprintf(w, "event: %s\ndata: {\"error\": \"failed to serialize event: %s\"}\n\n", eventType, err.Error())
-		flusher.Flush()
+		ctx.Response.SetBodyString(fmt.Sprintf("event: %s\ndata: {\"error\": \"failed to serialize event: %s\"}\n\n", eventType, err.Error()))
+		ctx.Flush()
 		return nil
 	}
 
 	// 发送SSE格式的事件
-	fmt.Fprintf(w, "event: %s\ndata: %s\n\n", eventType, data)
-	flusher.Flush()
+	ctx.Response.SetBodyString(fmt.Sprintf("event: %s\ndata: %s\n\n", eventType, data))
+	ctx.Flush()
 
 	return nil
 }
@@ -181,7 +190,7 @@ func (h *Handlers) extractEventData(event tea.Msg) (string, interface{}) {
 }
 
 // createEventChannelForProject 为指定项目的 app 实例创建事件通道
-func (h *Handlers) createEventChannelForProject(ctx context.Context, appInstance *app.App) <-chan tea.Msg {
+func (h *Handlers) createEventChannelForProject(ctx context.Context, appInstance *internalapp.App) <-chan tea.Msg {
 	eventCh := make(chan tea.Msg, 100)
 
 	var wg sync.WaitGroup
@@ -242,14 +251,14 @@ func (h *Handlers) createEventChannelForProject(ctx context.Context, appInstance
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		lspCh := app.SubscribeLSPEvents(ctx)
-		
+		lspCh := internalapp.SubscribeLSPEvents(ctx)
+
 		// 获取该项目的 LSP 客户端名称集合
 		projectLSPNames := make(map[string]bool)
 		for name := range appInstance.LSPClients.Seq2() {
 			projectLSPNames[name] = true
 		}
-		
+
 		for {
 			select {
 			case <-ctx.Done():
@@ -258,7 +267,7 @@ func (h *Handlers) createEventChannelForProject(ctx context.Context, appInstance
 				if !ok {
 					return
 				}
-				
+
 				// 过滤：只发送属于该项目的 LSP 事件
 				// event 已经是 pubsub.Event[app.LSPEvent] 类型
 				lspName := event.Payload.Name
@@ -267,7 +276,7 @@ func (h *Handlers) createEventChannelForProject(ctx context.Context, appInstance
 					// 不属于当前项目，跳过
 					continue
 				}
-				
+
 				select {
 				case eventCh <- event:
 				case <-ctx.Done():
@@ -287,37 +296,4 @@ func (h *Handlers) createEventChannelForProject(ctx context.Context, appInstance
 	}()
 
 	return eventCh
-}
-
-// extractProjectPathFromEvents 从 SSE URL 中提取项目路径
-// URL 格式: /api/v1/projects/{project_path}/events
-func extractProjectPathFromEvents(r *http.Request) (string, error) {
-	path := r.URL.Path
-	prefix := "/api/v1/projects/"
-	if !strings.HasPrefix(path, prefix) {
-		return "", fmt.Errorf("invalid path format")
-	}
-
-	// 移除前缀
-	rest := path[len(prefix):]
-
-	// 查找 /events 的位置
-	eventsIndex := strings.Index(rest, "/events")
-	if eventsIndex == -1 {
-		return "", fmt.Errorf("missing /events in path")
-	}
-
-	// 提取项目路径
-	projectPath := rest[:eventsIndex]
-	if projectPath == "" {
-		return "", fmt.Errorf("project path is empty")
-	}
-
-	// URL 解码
-	decoded, err := url.PathUnescape(projectPath)
-	if err != nil {
-		return "", fmt.Errorf("failed to decode project path: %w", err)
-	}
-
-	return decoded, nil
 }

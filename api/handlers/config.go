@@ -1,34 +1,47 @@
 package handlers
 
 import (
-	"net/http"
+	"context"
 	"strings"
 
 	"github.com/charmbracelet/crush/api/models"
+	hertzapp "github.com/cloudwego/hertz/pkg/app"
+	"github.com/cloudwego/hertz/pkg/protocol/consts"
 )
 
 // HandleGetConfig 获取配置信息 (参考 OpenCode: /config)
-func (h *Handlers) HandleGetConfig(w http.ResponseWriter, r *http.Request) {
-	projectPath, err := extractProjectPathFromConfig(r)
-	if err != nil {
-		WriteError(w, "INVALID_REQUEST", "Failed to extract project path: "+err.Error(), http.StatusBadRequest)
+//
+//	@Summary		获取项目配置
+//	@Description	获取指定项目的配置信息
+//	@Tags			Config
+//	@Accept			json
+//	@Produce		json
+//	@Param			directory	query		string	true	"项目路径"
+//	@Success		200		{object}	models.ConfigResponse
+//	@Failure		400		{object}	map[string]interface{}
+//	@Failure		404		{object}	map[string]interface{}
+//	@Router			/project/config [get]
+func (h *Handlers) HandleGetConfig(c context.Context, ctx *hertzapp.RequestContext) {
+	projectPath := string(ctx.Query("directory"))
+	if projectPath == "" {
+		WriteError(c, ctx, "MISSING_DIRECTORY_PARAM", "Directory query parameter is required", consts.StatusBadRequest)
 		return
 	}
 
 	// 获取项目的 app 实例
-	appInstance, err := h.GetAppForProject(r.Context(), projectPath)
+	appInstance, err := h.GetAppForProject(c, projectPath)
 	if err != nil {
-		if strings.Contains(err.Error(), "not open") {
-			WriteError(w, "APP_NOT_OPENED", "Project app instance is not open. Call open first: "+err.Error(), http.StatusBadRequest)
+		if strings.Contains(err.Error(), "project not found") {
+			WriteError(c, ctx, "PROJECT_NOT_FOUND", err.Error(), consts.StatusNotFound)
 			return
 		}
-		WriteError(w, "PROJECT_NOT_FOUND", "Failed to get app for project: "+err.Error(), http.StatusNotFound)
+		WriteError(c, ctx, "INTERNAL_ERROR", "Failed to get or create app for project: "+err.Error(), consts.StatusInternalServerError)
 		return
 	}
 
 	cfg := appInstance.Config()
 	if cfg == nil {
-		WriteError(w, "CONFIG_NOT_FOUND", "Configuration not available", http.StatusNotFound)
+		WriteError(c, ctx, "CONFIG_NOT_FOUND", "Configuration not available", consts.StatusNotFound)
 		return
 	}
 
@@ -51,10 +64,6 @@ func (h *Handlers) HandleGetConfig(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	WriteJSON(w, http.StatusOK, response)
+	WriteJSON(c, ctx, consts.StatusOK, response)
 }
 
-// extractProjectPathFromConfig 从配置 API URL 中提取项目路径
-func extractProjectPathFromConfig(r *http.Request) (string, error) {
-	return extractProjectPathGeneric(r, "/config")
-}

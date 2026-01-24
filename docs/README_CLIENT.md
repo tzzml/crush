@@ -16,9 +16,6 @@ python3 docs/test_api.py
 
 # SSE 测试
 python3 docs/test_sse.py
-
-# 客户端演示
-python3 docs/test_client.py
 ```
 
 ## 依赖安装
@@ -30,37 +27,38 @@ pip install requests sseclient-py
 ## 核心 API
 
 ### 项目管理
-- `POST /api/v1/projects/{path}/open` - 打开项目
-- `POST /api/v1/projects/{path}/close` - 关闭项目
+- `GET /project` - 列出项目
+- `POST /project` - 注册项目
 
 ### 会话和消息
-- `GET /api/v1/projects/{path}/sessions` - 列出会话
-- `POST /api/v1/projects/{path}/sessions` - 创建会话
-- `POST /api/v1/projects/{path}/sessions/{id}/messages` - 发送消息
+- `GET /session?directory={path}` - 列出会话
+- `POST /session?directory={path}` - 创建会话
+- `POST /session/{id}/message?directory={path}` - 发送消息
 
 ### 实时事件
-- `GET /api/v1/projects/{path}/events` - 订阅 SSE 事件
-
-**注意**：使用项目相关 API 前，必须先调用 `open` 打开项目。
+- `GET /event?directory={path}` - 订阅 SSE 事件
 
 ## 代码示例
 
 ```python
-from docs.test_client import CrushClient
+import requests
 
-client = CrushClient("http://localhost:8080/api/v1")
+BASE_URL = "http://localhost:8080"
+PROJECT = "/tmp/my-project"
 
-# 打开项目
-client.open_project("/tmp/my-project")
+# 注册项目
+requests.post(f"{BASE_URL}/project", json={"path": PROJECT})
 
 # 创建会话
-session = client.create_session("/tmp/my-project", "测试会话")
+resp = requests.post(f"{BASE_URL}/session", 
+                     params={"directory": PROJECT},
+                     json={"title": "测试会话"})
+session_id = resp.json()["session"]["id"]
 
 # 发送消息
-message = client.send_message("/tmp/my-project", session['id'], "你好")
-
-# 订阅事件
-client.subscribe_events("/tmp/my-project", callback=lambda t, d: print(t, d))
+requests.post(f"{BASE_URL}/session/{session_id}/message",
+              params={"directory": PROJECT},
+              json={"prompt": "你好", "stream": False})
 ```
 
 详细 API 文档请参考 [API.md](./API.md)。

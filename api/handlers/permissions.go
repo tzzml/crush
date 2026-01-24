@@ -1,30 +1,41 @@
 package handlers
 
 import (
-	"encoding/json"
-	"net/http"
-	"net/url"
+	"context"
 	"strings"
 
 	"github.com/charmbracelet/crush/api/models"
+	hertzapp "github.com/cloudwego/hertz/pkg/app"
+	"github.com/cloudwego/hertz/pkg/protocol/consts"
 )
 
 // HandleListPermissions 获取待处理的权限请求列表 (参考 OpenCode: /permission)
-func (h *Handlers) HandleListPermissions(w http.ResponseWriter, r *http.Request) {
-	projectPath, err := extractProjectPathFromPermissions(r)
-	if err != nil {
-		WriteError(w, "INVALID_REQUEST", "Failed to extract project path: "+err.Error(), http.StatusBadRequest)
+//
+//	@Summary		获取权限请求列表
+//	@Description	获取指定项目的权限请求列表
+//	@Tags			Permission
+//	@Accept			json
+//	@Produce		json
+//	@Param			directory	query		string	true	"项目路径"
+//	@Success		200		{object}	models.PermissionsResponse
+//	@Failure		400		{object}	map[string]interface{}
+//	@Failure		404		{object}	map[string]interface{}
+//	@Router			/project/permissions [get]
+func (h *Handlers) HandleListPermissions(c context.Context, ctx *hertzapp.RequestContext) {
+	projectPath := string(ctx.Query("directory"))
+	if projectPath == "" {
+		WriteError(c, ctx, "MISSING_DIRECTORY_PARAM", "Directory query parameter is required", consts.StatusBadRequest)
 		return
 	}
 
 	// 获取项目的 app 实例
-	appInstance, err := h.GetAppForProject(r.Context(), projectPath)
+	appInstance, err := h.GetAppForProject(c, projectPath)
 	if err != nil {
-		if strings.Contains(err.Error(), "not open") {
-			WriteError(w, "APP_NOT_OPENED", "Project app instance is not open. Call open first: "+err.Error(), http.StatusBadRequest)
+		if strings.Contains(err.Error(), "project not found") {
+			WriteError(c, ctx, "PROJECT_NOT_FOUND", err.Error(), consts.StatusNotFound)
 			return
 		}
-		WriteError(w, "PROJECT_NOT_FOUND", "Failed to get app for project: "+err.Error(), http.StatusNotFound)
+		WriteError(c, ctx, "INTERNAL_ERROR", "Failed to get or create app for project: "+err.Error(), consts.StatusInternalServerError)
 		return
 	}
 
@@ -35,31 +46,50 @@ func (h *Handlers) HandleListPermissions(w http.ResponseWriter, r *http.Request)
 		SkipRequests: skipRequests,
 	}
 
-	WriteJSON(w, http.StatusOK, response)
+	WriteJSON(c, ctx, consts.StatusOK, response)
 }
 
 // HandleReplyPermission 回复权限请求 (参考 OpenCode: /permission/{requestID}/reply)
-func (h *Handlers) HandleReplyPermission(w http.ResponseWriter, r *http.Request) {
-	projectPath, requestID, err := extractProjectAndPermissionID(r)
-	if err != nil {
-		WriteError(w, "INVALID_REQUEST", "Failed to extract request ID: "+err.Error(), http.StatusBadRequest)
+//
+//	@Summary		回复权限请求
+//	@Description	批准或拒绝特定的权限请求
+//	@Tags			Permission
+//	@Accept			json
+//	@Produce		json
+//	@Param			directory	query		string							true	"项目路径"
+//	@Param			id			path		string							true	"权限请求ID"
+//	@Param			request		body		models.PermissionReplyRequest	true	"权限回复请求"
+//	@Success		200			{object}	map[string]string
+//	@Failure		400			{object}	map[string]interface{}
+//	@Failure		404			{object}	map[string]interface{}
+//	@Router			/project/permissions/{id}/reply [post]
+func (h *Handlers) HandleReplyPermission(c context.Context, ctx *hertzapp.RequestContext) {
+	projectPath := string(ctx.Query("directory"))
+	if projectPath == "" {
+		WriteError(c, ctx, "MISSING_DIRECTORY_PARAM", "Directory query parameter is required", consts.StatusBadRequest)
+		return
+	}
+
+	requestID := ctx.Param("id")
+	if requestID == "" {
+		WriteError(c, ctx, "MISSING_REQUEST_ID", "Request ID path parameter is required", consts.StatusBadRequest)
 		return
 	}
 
 	var req models.PermissionReplyRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		WriteError(w, "INVALID_REQUEST", "Invalid request body: "+err.Error(), http.StatusBadRequest)
+	if err := ctx.BindJSON(&req); err != nil {
+		WriteError(c, ctx, "INVALID_REQUEST", "Invalid request body: "+err.Error(), consts.StatusBadRequest)
 		return
 	}
 
 	// 获取项目的 app 实例
-	appInstance, err := h.GetAppForProject(r.Context(), projectPath)
+	appInstance, err := h.GetAppForProject(c, projectPath)
 	if err != nil {
-		if strings.Contains(err.Error(), "not open") {
-			WriteError(w, "APP_NOT_OPENED", "Project app instance is not open. Call open first: "+err.Error(), http.StatusBadRequest)
+		if strings.Contains(err.Error(), "project not found") {
+			WriteError(c, ctx, "PROJECT_NOT_FOUND", err.Error(), consts.StatusNotFound)
 			return
 		}
-		WriteError(w, "PROJECT_NOT_FOUND", "Failed to get app for project: "+err.Error(), http.StatusNotFound)
+		WriteError(c, ctx, "INTERNAL_ERROR", "Failed to get or create app for project: "+err.Error(), consts.StatusInternalServerError)
 		return
 	}
 
@@ -82,7 +112,7 @@ func (h *Handlers) HandleReplyPermission(w http.ResponseWriter, r *http.Request)
 		appInstance.Permissions.Deny(permReq.ToInternal())
 	}
 
-	WriteJSON(w, http.StatusOK, map[string]string{
+	WriteJSON(c, ctx, consts.StatusOK, map[string]string{
 		"status":     "replied",
 		"request_id": requestID,
 		"granted":    boolToString(req.Granted),
@@ -94,42 +124,4 @@ func boolToString(b bool) string {
 		return "true"
 	}
 	return "false"
-}
-
-// extractProjectPathFromPermissions 从权限 API URL 中提取项目路径
-func extractProjectPathFromPermissions(r *http.Request) (string, error) {
-	return extractProjectPathGeneric(r, "/permissions")
-}
-
-// extractProjectAndPermissionID 从 URL 中提取项目路径和权限请求 ID
-func extractProjectAndPermissionID(r *http.Request) (projectPath, requestID string, err error) {
-	path := r.URL.Path
-	prefix := "/api/v1/projects/"
-	if !strings.HasPrefix(path, prefix) {
-		return "", "", http.ErrMissingFile
-	}
-
-	rest := path[len(prefix):]
-
-	// 查找 /permissions/ 的位置
-	permIdx := strings.Index(rest, "/permissions/")
-	if permIdx == -1 {
-		return "", "", http.ErrMissingFile
-	}
-
-	projectPath = rest[:permIdx]
-	projectPath, err = url.PathUnescape(projectPath)
-	if err != nil {
-		return "", "", err
-	}
-
-	// 提取 requestID 和 /reply 后缀
-	permPart := rest[permIdx+len("/permissions/"):]
-	replyIdx := strings.Index(permPart, "/reply")
-	if replyIdx == -1 {
-		return "", "", http.ErrMissingFile
-	}
-
-	requestID = permPart[:replyIdx]
-	return projectPath, requestID, nil
 }

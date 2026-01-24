@@ -1,38 +1,49 @@
 package handlers
 
 import (
-	"fmt"
+	"context"
 	"log/slog"
-	"net/http"
-	"net/url"
 	"strings"
 
 	"github.com/charmbracelet/crush/api/models"
+	"github.com/cloudwego/hertz/pkg/app"
+	"github.com/cloudwego/hertz/pkg/protocol/consts"
 )
 
 // HandleListSessions 处理获取项目下所有会话的请求
-func (h *Handlers) HandleListSessions(w http.ResponseWriter, r *http.Request) {
-	projectPath, err := extractProjectPath(r)
-	if err != nil {
-		WriteError(w, "INVALID_PROJECT_PATH", "Failed to extract project path: "+err.Error(), http.StatusBadRequest)
+//
+//	@Summary		获取会话列表
+//	@Description	获取指定项目的所有会话
+//	@Tags			Session
+//	@Accept			json
+//	@Produce		json
+//	@Param			directory	query		string	true	"项目路径"
+//	@Success		200			{object}	models.SessionsResponse
+//	@Failure		400			{object}	map[string]interface{}
+//	@Failure		404			{object}	map[string]interface{}
+//	@Router			/session [get]
+func (h *Handlers) HandleListSessions(c context.Context, ctx *app.RequestContext) {
+	projectPath := string(ctx.Query("directory"))
+	if projectPath == "" {
+		WriteError(c, ctx, "MISSING_DIRECTORY_PARAM", "Directory query parameter is required", consts.StatusBadRequest)
 		return
 	}
 
 	// 获取项目的 app 实例
-	appInstance, err := h.GetAppForProject(r.Context(), projectPath)
+	appInstance, err := h.GetAppForProject(c, projectPath)
 	if err != nil {
-		if strings.Contains(err.Error(), "not open") {
-			WriteError(w, "APP_NOT_OPENED", "Project app instance is not open. Call open first: "+err.Error(), http.StatusBadRequest)
+		if strings.Contains(err.Error(), "project not found") {
+			WriteError(c, ctx, "PROJECT_NOT_FOUND", err.Error(), consts.StatusNotFound)
 			return
 		}
-		WriteError(w, "PROJECT_NOT_FOUND", "Failed to get app for project: "+err.Error(), http.StatusNotFound)
+		WriteError(c, ctx, "INTERNAL_ERROR", "Failed to get or create app for project: "+err.Error(), consts.StatusInternalServerError)
 		return
 	}
 
 	// 获取所有会话
-	sessions, err := appInstance.Sessions.List(r.Context())
+	sessions, err := appInstance.Sessions.List(c)
 	if err != nil {
-		WriteError(w, "INTERNAL_ERROR", "Failed to list sessions: "+err.Error(), http.StatusInternalServerError)
+		WriteError(c, ctx, "INTERNAL_ERROR", "Failed to list sessions: "+err.Error(), consts.StatusInternalServerError)
 		return
 	}
 
@@ -44,45 +55,55 @@ func (h *Handlers) HandleListSessions(w http.ResponseWriter, r *http.Request) {
 		response.Sessions[i] = models.SessionToResponse(s)
 	}
 
-	WriteJSON(w, http.StatusOK, response)
+	WriteJSON(c, ctx, consts.StatusOK, response)
 }
 
 // HandleCreateSession 处理创建会话的请求
-func (h *Handlers) HandleCreateSession(w http.ResponseWriter, r *http.Request) {
-	projectPath, err := extractProjectPath(r)
-	if err != nil {
-		WriteError(w, "INVALID_REQUEST", err.Error(), http.StatusBadRequest)
+//
+//	@Summary		创建会话
+//	@Description	在指定项目中创建新会话
+//	@Tags			Session
+//	@Accept			json
+//	@Produce		json
+//	@Param			project		query		string						true	"项目路径"
+//	@Param			request		body		models.CreateSessionRequest	true	"创建会话请求"
+//	@Success		201			{object}	models.CreateSessionResponse
+//	@Failure		400			{object}	map[string]interface{}
+//	@Failure		404			{object}	map[string]interface{}
+//	@Router			/session [post]
+func (h *Handlers) HandleCreateSession(c context.Context, ctx *app.RequestContext) {
+	projectPath := string(ctx.Query("directory"))
+	if projectPath == "" {
+		WriteError(c, ctx, "MISSING_DIRECTORY_PARAM", "Directory query parameter is required", consts.StatusBadRequest)
 		return
 	}
 
 	var req models.CreateSessionRequest
-	if err := decodeJSON(r, &req); err != nil {
-		WriteError(w, "INVALID_REQUEST", "Invalid request body: "+err.Error(), http.StatusBadRequest)
+	if err := ctx.BindJSON(&req); err != nil {
+		WriteError(c, ctx, "INVALID_REQUEST", "Invalid request body: "+err.Error(), consts.StatusBadRequest)
 		return
 	}
 
 	if req.Title == "" {
-		WriteError(w, "INVALID_REQUEST", "Title is required", http.StatusBadRequest)
+		WriteError(c, ctx, "INVALID_REQUEST", "Title is required", consts.StatusBadRequest)
 		return
 	}
-
 
 	// 获取项目的 app 实例
-	appInstance, err := h.GetAppForProject(r.Context(), projectPath)
+	appInstance, err := h.GetAppForProject(c, projectPath)
 	if err != nil {
-		if strings.Contains(err.Error(), "not open") {
-			WriteError(w, "APP_NOT_OPENED", "Project app instance is not open. Call open first: "+err.Error(), http.StatusBadRequest)
+		if strings.Contains(err.Error(), "project not found") {
+			WriteError(c, ctx, "PROJECT_NOT_FOUND", err.Error(), consts.StatusNotFound)
 			return
 		}
-		WriteError(w, "PROJECT_NOT_FOUND", "Failed to get app for project: "+err.Error(), http.StatusNotFound)
+		WriteError(c, ctx, "INTERNAL_ERROR", "Failed to get or create app for project: "+err.Error(), consts.StatusInternalServerError)
 		return
 	}
 
-
 	// 创建会话
-	session, err := appInstance.Sessions.Create(r.Context(), req.Title)
+	session, err := appInstance.Sessions.Create(c, req.Title)
 	if err != nil {
-		WriteError(w, "INTERNAL_ERROR", "Failed to create session: "+err.Error(), http.StatusInternalServerError)
+		WriteError(c, ctx, "INTERNAL_ERROR", "Failed to create session: "+err.Error(), consts.StatusInternalServerError)
 		return
 	}
 
@@ -92,32 +113,46 @@ func (h *Handlers) HandleCreateSession(w http.ResponseWriter, r *http.Request) {
 		Session: models.SessionToResponse(session),
 	}
 
-	WriteJSON(w, http.StatusCreated, response)
+	WriteJSON(c, ctx, consts.StatusCreated, response)
 }
 
 // HandleGetSession 处理获取单个会话的请求
-func (h *Handlers) HandleGetSession(w http.ResponseWriter, r *http.Request) {
-	projectPath, sessionID, err := extractProjectAndSessionID(r)
-	if err != nil {
-		WriteError(w, "INVALID_REQUEST", err.Error(), http.StatusBadRequest)
+//
+//	@Summary		获取会话详情
+//	@Description	获取指定会话的详细信息
+//	@Tags			Session
+//	@Accept			json
+//	@Produce		json
+//	@Param			directory	query		string	true	"项目路径"
+//	@Param			id			path		string	true	"会话ID"
+//	@Success		200			{object}	models.SessionDetailResponse
+//	@Failure		400			{object}	map[string]interface{}
+//	@Failure		404			{object}	map[string]interface{}
+//	@Router			/session/{id} [get]
+func (h *Handlers) HandleGetSession(c context.Context, ctx *app.RequestContext) {
+	projectPath := string(ctx.Query("directory"))
+	if projectPath == "" {
+		WriteError(c, ctx, "MISSING_DIRECTORY_PARAM", "Directory query parameter is required", consts.StatusBadRequest)
 		return
 	}
 
+	sessionID := ctx.Param("id")
+
 	// 获取项目的 app 实例
-	appInstance, err := h.GetAppForProject(r.Context(), projectPath)
+	appInstance, err := h.GetAppForProject(c, projectPath)
 	if err != nil {
-		if strings.Contains(err.Error(), "not open") {
-			WriteError(w, "APP_NOT_OPENED", "Project app instance is not open. Call open first: "+err.Error(), http.StatusBadRequest)
+		if strings.Contains(err.Error(), "project not found") {
+			WriteError(c, ctx, "PROJECT_NOT_FOUND", err.Error(), consts.StatusNotFound)
 			return
 		}
-		WriteError(w, "PROJECT_NOT_FOUND", "Failed to get app for project: "+err.Error(), http.StatusNotFound)
+		WriteError(c, ctx, "INTERNAL_ERROR", "Failed to get or create app for project: "+err.Error(), consts.StatusInternalServerError)
 		return
 	}
 
 	// 获取会话详情
-	session, err := appInstance.Sessions.Get(r.Context(), sessionID)
+	session, err := appInstance.Sessions.Get(c, sessionID)
 	if err != nil {
-		WriteError(w, "SESSION_NOT_FOUND", "Session not found: "+err.Error(), http.StatusNotFound)
+		WriteError(c, ctx, "SESSION_NOT_FOUND", "Session not found: "+err.Error(), consts.StatusNotFound)
 		return
 	}
 
@@ -125,67 +160,96 @@ func (h *Handlers) HandleGetSession(w http.ResponseWriter, r *http.Request) {
 		Session: models.SessionToResponse(session),
 	}
 
-	WriteJSON(w, http.StatusOK, response)
+	WriteJSON(c, ctx, consts.StatusOK, response)
 }
 
 // HandleDeleteSession 处理删除会话的请求
-func (h *Handlers) HandleDeleteSession(w http.ResponseWriter, r *http.Request) {
-	projectPath, sessionID, err := extractProjectAndSessionID(r)
-	if err != nil {
-		WriteError(w, "INVALID_REQUEST", err.Error(), http.StatusBadRequest)
+//
+//	@Summary		删除会话
+//	@Description	删除指定的会话及其所有消息
+//	@Tags			Session
+//	@Accept			json
+//	@Produce		json
+//	@Param			directory	query		string	true	"项目路径"
+//	@Param			id			path		string	true	"会话ID"
+//	@Success		200			{object}	map[string]string
+//	@Failure		400			{object}	map[string]interface{}
+//	@Failure		404			{object}	map[string]interface{}
+//	@Router			/session/{id} [delete]
+func (h *Handlers) HandleDeleteSession(c context.Context, ctx *app.RequestContext) {
+	projectPath := string(ctx.Query("directory"))
+	if projectPath == "" {
+		WriteError(c, ctx, "MISSING_DIRECTORY_PARAM", "Directory query parameter is required", consts.StatusBadRequest)
 		return
 	}
 
+	sessionID := ctx.Param("id")
+
 	// 获取项目的 app 实例
-	appInstance, err := h.GetAppForProject(r.Context(), projectPath)
+	appInstance, err := h.GetAppForProject(c, projectPath)
 	if err != nil {
-		if strings.Contains(err.Error(), "not open") {
-			WriteError(w, "APP_NOT_OPENED", "Project app instance is not open. Call open first: "+err.Error(), http.StatusBadRequest)
+		if strings.Contains(err.Error(), "project not found") {
+			WriteError(c, ctx, "PROJECT_NOT_FOUND", err.Error(), consts.StatusNotFound)
 			return
 		}
-		WriteError(w, "PROJECT_NOT_FOUND", "Failed to get app for project: "+err.Error(), http.StatusNotFound)
+		WriteError(c, ctx, "INTERNAL_ERROR", "Failed to get or create app for project: "+err.Error(), consts.StatusInternalServerError)
 		return
 	}
 
 	// 删除会话
-	err = appInstance.Sessions.Delete(r.Context(), sessionID)
+	err = appInstance.Sessions.Delete(c, sessionID)
 	if err != nil {
-		WriteError(w, "SESSION_NOT_FOUND", "Session not found: "+err.Error(), http.StatusNotFound)
+		WriteError(c, ctx, "SESSION_NOT_FOUND", "Session not found: "+err.Error(), consts.StatusNotFound)
 		return
 	}
 
-	WriteJSON(w, http.StatusOK, map[string]string{"message": "Session deleted successfully"})
+	WriteJSON(c, ctx, consts.StatusOK, map[string]string{"message": "Session deleted successfully"})
 }
 
 // HandleUpdateSession 处理更新会话的请求
-func (h *Handlers) HandleUpdateSession(w http.ResponseWriter, r *http.Request) {
-	projectPath, sessionID, err := extractProjectAndSessionID(r)
-	if err != nil {
-		WriteError(w, "INVALID_REQUEST", err.Error(), http.StatusBadRequest)
+//
+//	@Summary		更新会话
+//	@Description	更新指定会话的信息
+//	@Tags			Session
+//	@Accept			json
+//	@Produce		json
+//	@Param			project		query		string							true	"项目路径"
+//	@Param			id			path		string							true	"会话ID"
+//	@Param			request		body		models.UpdateSessionRequest	true	"更新会话请求"
+//	@Success		200			{object}	models.UpdateSessionResponse
+//	@Failure		400			{object}	map[string]interface{}
+//	@Failure		404			{object}	map[string]interface{}
+//	@Router			/session/{id} [put]
+func (h *Handlers) HandleUpdateSession(c context.Context, ctx *app.RequestContext) {
+	projectPath := string(ctx.Query("directory"))
+	if projectPath == "" {
+		WriteError(c, ctx, "MISSING_DIRECTORY_PARAM", "Directory query parameter is required", consts.StatusBadRequest)
 		return
 	}
 
+	sessionID := ctx.Param("id")
+
 	var req models.UpdateSessionRequest
-	if err := decodeJSON(r, &req); err != nil {
-		WriteError(w, "INVALID_REQUEST", "Invalid request body: "+err.Error(), http.StatusBadRequest)
+	if err := ctx.BindJSON(&req); err != nil {
+		WriteError(c, ctx, "INVALID_REQUEST", "Invalid request body: "+err.Error(), consts.StatusBadRequest)
 		return
 	}
 
 	// 获取项目的 app 实例
-	appInstance, err := h.GetAppForProject(r.Context(), projectPath)
+	appInstance, err := h.GetAppForProject(c, projectPath)
 	if err != nil {
-		if strings.Contains(err.Error(), "not open") {
-			WriteError(w, "APP_NOT_OPENED", "Project app instance is not open. Call open first: "+err.Error(), http.StatusBadRequest)
+		if strings.Contains(err.Error(), "project not found") {
+			WriteError(c, ctx, "PROJECT_NOT_FOUND", err.Error(), consts.StatusNotFound)
 			return
 		}
-		WriteError(w, "PROJECT_NOT_FOUND", "Failed to get app for project: "+err.Error(), http.StatusNotFound)
+		WriteError(c, ctx, "INTERNAL_ERROR", "Failed to get or create app for project: "+err.Error(), consts.StatusInternalServerError)
 		return
 	}
 
 	// 获取现有会话
-	session, err := appInstance.Sessions.Get(r.Context(), sessionID)
+	session, err := appInstance.Sessions.Get(c, sessionID)
 	if err != nil {
-		WriteError(w, "SESSION_NOT_FOUND", "Session not found: "+err.Error(), http.StatusNotFound)
+		WriteError(c, ctx, "SESSION_NOT_FOUND", "Session not found: "+err.Error(), consts.StatusNotFound)
 		return
 	}
 
@@ -195,9 +259,9 @@ func (h *Handlers) HandleUpdateSession(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 保存更新后的会话
-	updatedSession, err := appInstance.Sessions.Save(r.Context(), session)
+	updatedSession, err := appInstance.Sessions.Save(c, session)
 	if err != nil {
-		WriteError(w, "INTERNAL_ERROR", "Failed to update session: "+err.Error(), http.StatusInternalServerError)
+		WriteError(c, ctx, "INTERNAL_ERROR", "Failed to update session: "+err.Error(), consts.StatusInternalServerError)
 		return
 	}
 
@@ -205,65 +269,5 @@ func (h *Handlers) HandleUpdateSession(w http.ResponseWriter, r *http.Request) {
 		Session: models.SessionToResponse(updatedSession),
 	}
 
-	WriteJSON(w, http.StatusOK, response)
-}
-
-// extractSessionID 从 URL 中提取会话 ID
-func extractSessionID(r *http.Request) string {
-	path := r.URL.Path
-	prefix := "/api/v1/sessions/"
-	if !strings.HasPrefix(path, prefix) {
-		return ""
-	}
-
-	rest := path[len(prefix):]
-
-	// 如果后面还有路径（如 /messages），需要截断
-	if idx := strings.Index(rest, "/"); idx != -1 {
-		return rest[:idx]
-	}
-
-	return rest
-}
-
-// extractProjectAndSessionID 从 URL 中提取项目路径和会话 ID
-// URL 格式: /api/v1/projects/{project_path}/sessions/{session_id}
-func extractProjectAndSessionID(r *http.Request) (projectPath, sessionID string, err error) {
-	path := r.URL.Path
-	prefix := "/api/v1/projects/"
-	if !strings.HasPrefix(path, prefix) {
-		return "", "", fmt.Errorf("invalid path format")
-	}
-
-	// 移除前缀
-	rest := path[len(prefix):]
-
-	// 查找 /sessions/ 的位置
-	sessionsIndex := strings.Index(rest, "/sessions/")
-	if sessionsIndex == -1 {
-		return "", "", fmt.Errorf("missing /sessions/ in path")
-	}
-
-	// 提取项目路径
-	projectPath = rest[:sessionsIndex]
-	if projectPath == "" {
-		return "", "", fmt.Errorf("project path is empty")
-	}
-
-	// URL 解码项目路径
-	projectPath, err = url.QueryUnescape(projectPath)
-	if err != nil {
-		return "", "", fmt.Errorf("failed to decode project path: %w", err)
-	}
-
-	// 提取会话ID部分
-	sessionPart := rest[sessionsIndex+len("/sessions/"):]
-	// 移除可能的尾部斜杠
-	sessionPart = strings.TrimSuffix(sessionPart, "/")
-	if sessionPart == "" {
-		return "", "", fmt.Errorf("session ID is empty")
-	}
-
-	sessionID = sessionPart
-	return projectPath, sessionID, nil
+	WriteJSON(c, ctx, consts.StatusOK, response)
 }

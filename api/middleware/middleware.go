@@ -1,63 +1,61 @@
 package middleware
 
 import (
+	"context"
 	"log/slog"
-	"net/http"
 	"time"
+
+	"github.com/cloudwego/hertz/pkg/app"
+	"github.com/cloudwego/hertz/pkg/protocol/consts"
 )
 
 // LoggingMiddleware 记录 HTTP 请求日志
-func LoggingMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func LoggingMiddleware() app.HandlerFunc {
+	return func(c context.Context, ctx *app.RequestContext) {
 		start := time.Now()
 
-		// 创建响应写入器来捕获状态码
-		rw := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+		// 记录请求开始
+		method := string(ctx.Method())
+		path := string(ctx.Path())
+		remoteAddr := ctx.RemoteAddr()
 
-		next.ServeHTTP(rw, r)
+		// 执行下一个中间件/handler
+		ctx.Next(c)
 
+		// 记录请求完成
 		duration := time.Since(start)
+		statusCode := ctx.Response.StatusCode()
 		slog.Info("HTTP request",
-			"method", r.Method,
-			"path", r.URL.Path,
-			"status", rw.statusCode,
+			"method", method,
+			"path", path,
+			"status", statusCode,
 			"duration", duration,
-			"remote_addr", r.RemoteAddr,
+			"remote_addr", remoteAddr,
 		)
-	})
-}
-
-// responseWriter 包装 http.ResponseWriter 以捕获状态码
-type responseWriter struct {
-	http.ResponseWriter
-	statusCode int
-}
-
-func (rw *responseWriter) WriteHeader(code int) {
-	rw.statusCode = code
-	rw.ResponseWriter.WriteHeader(code)
+	}
 }
 
 // CORSMiddleware 添加 CORS 头
-func CORSMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+func CORSMiddleware() app.HandlerFunc {
+	return func(c context.Context, ctx *app.RequestContext) {
+		ctx.Response.Header.Set("Access-Control-Allow-Origin", "*")
+		ctx.Response.Header.Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		ctx.Response.Header.Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 
-		if r.Method == "OPTIONS" {
-			w.WriteHeader(http.StatusOK)
+		if string(ctx.Method()) == "OPTIONS" {
+			ctx.SetStatusCode(consts.StatusNoContent)
+			ctx.Abort()
 			return
 		}
 
-		next.ServeHTTP(w, r)
-	})
+		ctx.Next(c)
+	}
 }
 
 // JSONMiddleware 设置 JSON Content-Type
-func JSONMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		next.ServeHTTP(w, r)
-	})
+func JSONMiddleware() app.HandlerFunc {
+	return func(c context.Context, ctx *app.RequestContext) {
+		ctx.SetContentType("application/json; charset=utf-8")
+		ctx.Next(c)
+	}
 }

@@ -1,43 +1,56 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
-	"net/http"
-	"net/url"
 	"strings"
 	"time"
 
 	"github.com/charmbracelet/crush/api/models"
-	"github.com/charmbracelet/crush/internal/app"
+	internalapp "github.com/charmbracelet/crush/internal/app"
 	"github.com/charmbracelet/crush/internal/message"
+	hertzapp "github.com/cloudwego/hertz/pkg/app"
+	"github.com/cloudwego/hertz/pkg/protocol/consts"
 )
 
 // HandleListMessages 处理获取会话消息列表的请求
-func (h *Handlers) HandleListMessages(w http.ResponseWriter, r *http.Request) {
-	projectPath, sessionID, err := extractProjectAndSessionIDFromMessages(r)
-	if err != nil {
-		WriteError(w, "INVALID_REQUEST", err.Error(), http.StatusBadRequest)
+//
+//	@Summary		获取消息列表
+//	@Description	获取指定会话的所有消息
+//	@Tags			Message
+//	@Accept			json
+//	@Produce		json
+//	@Param			directory	query		string	true	"项目路径"
+//	@Param			session_id	path		string	true	"会话ID"
+//	@Success		200			{object}	models.MessagesResponse
+//	@Failure		400			{object}	map[string]interface{}
+//	@Failure		404			{object}	map[string]interface{}
+//	@Router			/session/{session_id}/message [get]
+func (h *Handlers) HandleListMessages(c context.Context, ctx *hertzapp.RequestContext) {
+	projectPath := string(ctx.Query("directory"))
+	if projectPath == "" {
+		WriteError(c, ctx, "MISSING_DIRECTORY_PARAM", "Directory query parameter is required", consts.StatusBadRequest)
 		return
 	}
+	sessionID := ctx.Param("session_id")
 
 	// 获取项目的 app 实例
-	appInstance, err := h.GetAppForProject(r.Context(), projectPath)
+	appInstance, err := h.GetAppForProject(c, projectPath)
 	if err != nil {
-		if strings.Contains(err.Error(), "not open") {
-			WriteError(w, "APP_NOT_OPENED", "Project app instance is not open. Call open first: "+err.Error(), http.StatusBadRequest)
+		if strings.Contains(err.Error(), "project not found") {
+			WriteError(c, ctx, "PROJECT_NOT_FOUND", err.Error(), consts.StatusNotFound)
 			return
 		}
-		WriteError(w, "PROJECT_NOT_FOUND", "Failed to get app for project: "+err.Error(), http.StatusNotFound)
+		WriteError(c, ctx, "INTERNAL_ERROR", "Failed to get or create app for project: "+err.Error(), consts.StatusInternalServerError)
 		return
 	}
 
 	// 获取消息列表
-	messages, err := appInstance.Messages.List(r.Context(), sessionID)
+	messages, err := appInstance.Messages.List(c, sessionID)
 	if err != nil {
-		WriteError(w, "INTERNAL_ERROR", "Failed to list messages: "+err.Error(), http.StatusInternalServerError)
+		WriteError(c, ctx, "INTERNAL_ERROR", "Failed to list messages: "+err.Error(), consts.StatusInternalServerError)
 		return
 	}
 
@@ -49,59 +62,69 @@ func (h *Handlers) HandleListMessages(w http.ResponseWriter, r *http.Request) {
 		response.Messages[i] = models.MessageToResponse(m)
 	}
 
-	WriteJSON(w, http.StatusOK, response)
+	WriteJSON(c, ctx, consts.StatusOK, response)
 }
 
 // HandleCreateMessage 处理发送消息的请求（支持同步和流式）
-func (h *Handlers) HandleCreateMessage(w http.ResponseWriter, r *http.Request) {
-	projectPath, sessionID, err := extractProjectAndSessionIDFromMessages(r)
-	if err != nil {
-		WriteError(w, "INVALID_REQUEST", err.Error(), http.StatusBadRequest)
+//
+//	@Summary		创建消息
+//	@Description	在指定会话中创建新消息，支持同步和流式响应
+//	@Tags			Message
+//	@Accept			json
+//	@Produce		json
+//	@Param			project		query		string						true	"项目路径"
+//	@Param			session_id	path		string						true	"会话ID"
+//	@Param			request		body		models.CreateMessageRequest	true	"创建消息请求"
+//	@Success		200			{object}	models.CreateMessageResponse
+//	@Failure		400			{object}	map[string]interface{}
+//	@Failure		404			{object}	map[string]interface{}
+//	@Router			/session/{session_id}/message [post]
+func (h *Handlers) HandleCreateMessage(c context.Context, ctx *hertzapp.RequestContext) {
+	projectPath := string(ctx.Query("directory"))
+	if projectPath == "" {
+		WriteError(c, ctx, "MISSING_DIRECTORY_PARAM", "Directory query parameter is required", consts.StatusBadRequest)
 		return
 	}
+	sessionID := ctx.Param("session_id")
 
 	var req models.CreateMessageRequest
-	if err := decodeJSON(r, &req); err != nil {
-		WriteError(w, "INVALID_REQUEST", "Invalid request body: "+err.Error(), http.StatusBadRequest)
+	if err := ctx.BindJSON(&req); err != nil {
+		WriteError(c, ctx, "INVALID_REQUEST", "Invalid request body: "+err.Error(), consts.StatusBadRequest)
 		return
 	}
 
 	if req.Prompt == "" {
-		WriteError(w, "INVALID_REQUEST", "Prompt is required", http.StatusBadRequest)
+		WriteError(c, ctx, "INVALID_REQUEST", "Prompt is required", consts.StatusBadRequest)
 		return
 	}
 
 	// 获取项目的 app 实例
-	appInstance, err := h.GetAppForProject(r.Context(), projectPath)
+	appInstance, err := h.GetAppForProject(c, projectPath)
 	if err != nil {
-		if strings.Contains(err.Error(), "not open") {
-			WriteError(w, "APP_NOT_OPENED", "Project app instance is not open. Call open first: "+err.Error(), http.StatusBadRequest)
+		if strings.Contains(err.Error(), "project not found") {
+			WriteError(c, ctx, "PROJECT_NOT_FOUND", err.Error(), consts.StatusNotFound)
 			return
 		}
-		WriteError(w, "PROJECT_NOT_FOUND", "Failed to get app for project: "+err.Error(), http.StatusNotFound)
+		WriteError(c, ctx, "INTERNAL_ERROR", "Failed to get or create app for project: "+err.Error(), consts.StatusInternalServerError)
 		return
 	}
-
-	// 直接创建消息，如果会话不存在会自动失败
 
 	// 自动批准权限请求
 	appInstance.Permissions.AutoApproveSession(sessionID)
 
 	if req.Stream {
 		// 流式响应
-		h.handleStreamMessage(w, r, sessionID, req.Prompt, appInstance)
+		h.handleStreamMessage(c, ctx, sessionID, req.Prompt, appInstance)
 	} else {
 		// 同步响应
-		h.handleSyncMessage(w, r, sessionID, req.Prompt, appInstance)
+		h.handleSyncMessage(c, ctx, sessionID, req.Prompt, appInstance)
 	}
 }
 
 // handleSyncMessage 处理同步消息响应
-func (h *Handlers) handleSyncMessage(w http.ResponseWriter, r *http.Request, sessionID, prompt string, appInstance *app.App) {
-	ctx := r.Context()
-
+func (h *Handlers) handleSyncMessage(c context.Context, ctx *hertzapp.RequestContext, sessionID, prompt string, appInstance *internalapp.App) {
 	// 创建用户消息
-	_, err := appInstance.Messages.Create(ctx, sessionID, message.CreateMessageParams{
+	_, err := appInstance.Messages.Create(c, sessionID, message.CreateMessageParams{
 		Role:             message.User,
 		Parts:            []message.ContentPart{message.TextContent{Text: prompt}},
 		Model:            "",
@@ -109,7 +132,7 @@ func (h *Handlers) handleSyncMessage(w http.ResponseWriter, r *http.Request, ses
 		IsSummaryMessage: false,
 	})
 	if err != nil {
-		WriteError(w, "INTERNAL_ERROR", "Failed to create user message: "+err.Error(), http.StatusInternalServerError)
+		WriteError(c, ctx, "INTERNAL_ERROR", "Failed to create user message: "+err.Error(), consts.StatusInternalServerError)
 		return
 	}
 
@@ -129,7 +152,7 @@ func (h *Handlers) handleSyncMessage(w http.ResponseWriter, r *http.Request, ses
 		}
 
 		// 执行AI推理
-		result, err := appInstance.AgentCoordinator.Run(ctx, sessionID, prompt)
+		result, err := appInstance.AgentCoordinator.Run(c, sessionID, prompt)
 		if err != nil {
 			slog.Error("AI run failed", "session_id", sessionID, "error", err)
 		}
@@ -140,22 +163,22 @@ func (h *Handlers) handleSyncMessage(w http.ResponseWriter, r *http.Request, ses
 	}()
 
 	// 订阅消息事件
-	messageEvents := appInstance.Messages.Subscribe(ctx)
+	messageEvents := appInstance.Messages.Subscribe(c)
 	var assistantMsg message.Message
 
 	timeout := time.After(5 * time.Minute) // 5分钟超时
 
 	for {
 		select {
-		case <-ctx.Done():
-			WriteError(w, "REQUEST_CANCELLED", "Request cancelled", http.StatusRequestTimeout)
+		case <-c.Done():
+			WriteError(c, ctx, "REQUEST_CANCELLED", "Request cancelled", consts.StatusRequestTimeout)
 			return
 		case <-timeout:
-			WriteError(w, "TIMEOUT", "Request timeout", http.StatusRequestTimeout)
+			WriteError(c, ctx, "TIMEOUT", "Request timeout", consts.StatusRequestTimeout)
 			return
 		case result := <-done:
 			if result.err != nil {
-				WriteError(w, "INTERNAL_ERROR", "Failed to run agent: "+result.err.Error(), http.StatusInternalServerError)
+				WriteError(c, ctx, "INTERNAL_ERROR", "Failed to run agent: "+result.err.Error(), consts.StatusInternalServerError)
 				return
 			}
 			// 等待最后的消息更新
@@ -177,34 +200,26 @@ func (h *Handlers) handleSyncMessage(w http.ResponseWriter, r *http.Request, ses
 
 done:
 	// 获取更新后的会话信息
-	updatedSession, _ := appInstance.Sessions.Get(ctx, sessionID)
+	updatedSession, _ := appInstance.Sessions.Get(c, sessionID)
 
 	response := models.CreateMessageResponse{
 		Message: models.MessageToResponse(assistantMsg),
 		Session: models.SessionToResponse(updatedSession),
 	}
 
-	WriteJSON(w, http.StatusOK, response)
+	WriteJSON(c, ctx, consts.StatusOK, response)
 }
 
 // handleStreamMessage 处理流式消息响应
-func (h *Handlers) handleStreamMessage(w http.ResponseWriter, r *http.Request, sessionID, prompt string, appInstance *app.App) {
-	ctx := r.Context()
-
+func (h *Handlers) handleStreamMessage(c context.Context, ctx *hertzapp.RequestContext, sessionID, prompt string, appInstance *internalapp.App) {
 	// 设置 SSE 响应头
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
-	w.Header().Set("X-Accel-Buffering", "no") // 禁用 nginx 缓冲
-
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		WriteError(w, "INTERNAL_ERROR", "Streaming not supported", http.StatusInternalServerError)
-		return
-	}
+	ctx.SetContentType("text/event-stream")
+	ctx.Response.Header.Set("Cache-Control", "no-cache")
+	ctx.Response.Header.Set("Connection", "keep-alive")
+	ctx.Response.Header.Set("X-Accel-Buffering", "no") // 禁用 nginx 缓冲
 
 	// 创建用户消息
-	userMsg, err := appInstance.Messages.Create(ctx, sessionID, message.CreateMessageParams{
+	userMsg, err := appInstance.Messages.Create(c, sessionID, message.CreateMessageParams{
 		Role:             message.User,
 		Parts:            []message.ContentPart{message.TextContent{Text: prompt}},
 		Model:            "",
@@ -212,16 +227,16 @@ func (h *Handlers) handleStreamMessage(w http.ResponseWriter, r *http.Request, s
 		IsSummaryMessage: false,
 	})
 	if err != nil {
-		writeSSEError(w, "Failed to create user message: "+err.Error())
+		writeSSEError(ctx, "Failed to create user message: "+err.Error())
 		return
 	}
 
 	// 发送开始事件
-	writeSSE(w, models.SSEEvent{
+	writeSSE(ctx, models.SSEEvent{
 		Type:      "start",
 		MessageID: userMsg.ID,
 	})
-	flusher.Flush()
+	ctx.Flush()
 
 	// 运行 AI
 	done := make(chan struct {
@@ -238,7 +253,7 @@ func (h *Handlers) handleStreamMessage(w http.ResponseWriter, r *http.Request, s
 			return
 		}
 
-		result, err := appInstance.AgentCoordinator.Run(ctx, sessionID, prompt)
+		result, err := appInstance.AgentCoordinator.Run(c, sessionID, prompt)
 		done <- struct {
 			result interface{}
 			err    error
@@ -246,7 +261,7 @@ func (h *Handlers) handleStreamMessage(w http.ResponseWriter, r *http.Request, s
 	}()
 
 	// 订阅消息事件
-	messageEvents := appInstance.Messages.Subscribe(ctx)
+	messageEvents := appInstance.Messages.Subscribe(c)
 	messageReadBytes := make(map[string]int)
 	var assistantMsg message.Message
 
@@ -254,15 +269,15 @@ func (h *Handlers) handleStreamMessage(w http.ResponseWriter, r *http.Request, s
 
 	for {
 		select {
-		case <-ctx.Done():
-			writeSSEError(w, "Request cancelled")
+		case <-c.Done():
+			writeSSEError(ctx, "Request cancelled")
 			return
 		case <-timeout:
-			writeSSEError(w, "Request timeout")
+			writeSSEError(ctx, "Request timeout")
 			return
 		case result := <-done:
 			if result.err != nil {
-				writeSSEError(w, "Failed to run agent: "+result.err.Error())
+				writeSSEError(ctx, "Failed to run agent: "+result.err.Error())
 				return
 			}
 			// 等待最后的消息更新
@@ -280,11 +295,11 @@ func (h *Handlers) handleStreamMessage(w http.ResponseWriter, r *http.Request, s
 					messageReadBytes[msg.ID] = len(content)
 
 					// 发送内容块
-					writeSSE(w, models.SSEEvent{
+					writeSSE(ctx, models.SSEEvent{
 						Type:    "chunk",
 						Content: chunk,
 					})
-					flusher.Flush()
+					ctx.Flush()
 				}
 
 				// 检查消息是否完成
@@ -298,41 +313,54 @@ func (h *Handlers) handleStreamMessage(w http.ResponseWriter, r *http.Request, s
 
 streamDone:
 	// 获取更新后的会话信息
-	updatedSession, _ := appInstance.Sessions.Get(ctx, sessionID)
+	updatedSession, _ := appInstance.Sessions.Get(c, sessionID)
 
 	// 发送完成事件
-	writeSSE(w, models.SSEEvent{
+	writeSSE(ctx, models.SSEEvent{
 		Type:      "done",
 		MessageID: assistantMsg.ID,
 		Message:   models.MessageToResponse(assistantMsg),
 		Session:   models.SessionToResponse(updatedSession),
 	})
-	flusher.Flush()
+	ctx.Flush()
 }
 
 // HandleGetMessage 处理获取单个消息的请求
-func (h *Handlers) HandleGetMessage(w http.ResponseWriter, r *http.Request) {
-	projectPath, messageID, err := extractProjectAndMessageID(r)
-	if err != nil {
-		WriteError(w, "INVALID_REQUEST", err.Error(), http.StatusBadRequest)
+//
+//	@Summary		获取消息详情
+//	@Description	获取指定消息的详细信息
+//	@Tags			Message
+//	@Accept			json
+//	@Produce		json
+//	@Param			directory	query		string	true	"项目路径"
+//	@Param			id			path		string	true	"消息ID"
+//	@Success		200			{object}	models.MessageDetailResponse
+//	@Failure		400			{object}	map[string]interface{}
+//	@Failure		404			{object}	map[string]interface{}
+//	@Router			/message/{id} [get]
+func (h *Handlers) HandleGetMessage(c context.Context, ctx *hertzapp.RequestContext) {
+	projectPath := string(ctx.Query("directory"))
+	if projectPath == "" {
+		WriteError(c, ctx, "MISSING_DIRECTORY_PARAM", "Directory query parameter is required", consts.StatusBadRequest)
 		return
 	}
+	messageID := ctx.Param("id")
 
 	// 获取项目的 app 实例
-	appInstance, err := h.GetAppForProject(r.Context(), projectPath)
+	appInstance, err := h.GetAppForProject(c, projectPath)
 	if err != nil {
-		if strings.Contains(err.Error(), "not open") {
-			WriteError(w, "APP_NOT_OPENED", "Project app instance is not open. Call open first: "+err.Error(), http.StatusBadRequest)
+		if strings.Contains(err.Error(), "project not found") {
+			WriteError(c, ctx, "PROJECT_NOT_FOUND", err.Error(), consts.StatusNotFound)
 			return
 		}
-		WriteError(w, "PROJECT_NOT_FOUND", "Failed to get app for project: "+err.Error(), http.StatusNotFound)
+		WriteError(c, ctx, "INTERNAL_ERROR", "Failed to get or create app for project: "+err.Error(), consts.StatusInternalServerError)
 		return
 	}
 
 	// 获取消息
-	msg, err := appInstance.Messages.Get(r.Context(), messageID)
+	msg, err := appInstance.Messages.Get(c, messageID)
 	if err != nil {
-		WriteError(w, "MESSAGE_NOT_FOUND", "Message not found: "+err.Error(), http.StatusNotFound)
+		WriteError(c, ctx, "MESSAGE_NOT_FOUND", "Message not found: "+err.Error(), consts.StatusNotFound)
 		return
 	}
 
@@ -340,130 +368,17 @@ func (h *Handlers) HandleGetMessage(w http.ResponseWriter, r *http.Request) {
 		Message: models.MessageToResponse(msg),
 	}
 
-	WriteJSON(w, http.StatusOK, response)
-}
-
-// extractSessionIDFromMessagesPath 从消息路径中提取会话 ID
-// extractProjectAndMessageID 从 URL 中提取项目路径和消息 ID
-// URL 格式: /api/v1/projects/{project_path}/messages/{message_id}
-func extractProjectAndMessageID(r *http.Request) (projectPath, messageID string, err error) {
-	path := r.URL.Path
-	prefix := "/api/v1/projects/"
-	if !strings.HasPrefix(path, prefix) {
-		return "", "", fmt.Errorf("invalid path format")
-	}
-
-	// 移除前缀
-	rest := path[len(prefix):]
-
-	// 查找 /messages/ 的位置
-	messagesIndex := strings.Index(rest, "/messages/")
-	if messagesIndex == -1 {
-		return "", "", fmt.Errorf("missing /messages/ in path")
-	}
-
-	// 提取项目路径
-	projectPath = rest[:messagesIndex]
-	if projectPath == "" {
-		return "", "", fmt.Errorf("project path is empty")
-	}
-
-	// URL 解码项目路径
-	projectPath, err = url.QueryUnescape(projectPath)
-	if err != nil {
-		return "", "", fmt.Errorf("failed to decode project path: %w", err)
-	}
-
-	// 提取消息ID部分
-	messagePart := rest[messagesIndex+len("/messages/"):]
-	// 移除可能的尾部斜杠
-	messagePart = strings.TrimSuffix(messagePart, "/")
-	if messagePart == "" {
-		return "", "", fmt.Errorf("message ID is empty")
-	}
-
-	messageID = messagePart
-	return projectPath, messageID, nil
-}
-
-// extractProjectAndSessionIDFromMessages 从消息URL中提取项目路径和会话ID
-// URL 格式: /api/v1/projects/{project_path}/sessions/{session_id}/messages
-func extractProjectAndSessionIDFromMessages(r *http.Request) (projectPath, sessionID string, err error) {
-	path := r.URL.Path
-	prefix := "/api/v1/projects/"
-	if !strings.HasPrefix(path, prefix) {
-		return "", "", fmt.Errorf("invalid path format")
-	}
-
-	// 移除前缀
-	rest := path[len(prefix):]
-
-	// 查找 /sessions/ 的位置
-	sessionsIndex := strings.Index(rest, "/sessions/")
-	if sessionsIndex == -1 {
-		return "", "", fmt.Errorf("missing /sessions/ in path")
-	}
-
-	// 提取项目路径
-	projectPath = rest[:sessionsIndex]
-	if projectPath == "" {
-		return "", "", fmt.Errorf("project path is empty")
-	}
-
-	// URL 解码项目路径
-	projectPath, err = url.QueryUnescape(projectPath)
-	if err != nil {
-		return "", "", fmt.Errorf("failed to decode project path: %w", err)
-	}
-
-	// 查找 /messages 的位置
-	messagesIndex := strings.Index(rest, "/messages")
-	if messagesIndex == -1 {
-		return "", "", fmt.Errorf("missing /messages in path")
-	}
-
-	// 提取会话ID部分
-	sessionPart := rest[sessionsIndex+len("/sessions/") : messagesIndex]
-	// 移除可能的尾部斜杠
-	sessionPart = strings.TrimSuffix(sessionPart, "/")
-	if sessionPart == "" {
-		return "", "", fmt.Errorf("session ID is empty")
-	}
-
-	sessionID = sessionPart
-	return projectPath, sessionID, nil
-}
-
-func extractSessionIDFromMessagesPath(r *http.Request) string {
-	path := r.URL.Path
-	prefix := "/api/v1/sessions/"
-	if !strings.HasPrefix(path, prefix) {
-		return ""
-	}
-
-	rest := path[len(prefix):]
-	idx := strings.Index(rest, "/messages")
-	if idx == -1 {
-		return ""
-	}
-
-	return rest[:idx]
-}
-
-// decodeJSON 解码 JSON 请求体
-func decodeJSON(r *http.Request, v interface{}) error {
-	return json.NewDecoder(r.Body).Decode(v)
+	WriteJSON(c, ctx, consts.StatusOK, response)
 }
 
 // writeSSE 写入 SSE 事件
-func writeSSE(w io.Writer, event models.SSEEvent) {
+func writeSSE(ctx *hertzapp.RequestContext, event models.SSEEvent) {
 	data, _ := json.Marshal(event)
-	fmt.Fprintf(w, "event: %s\n", event.Type)
-	fmt.Fprintf(w, "data: %s\n\n", data)
+	ctx.Response.SetBodyString(fmt.Sprintf("event: %s\ndata: %s\n\n", event.Type, data))
 }
 
 // writeSSEError 写入 SSE 错误事件
-func writeSSEError(w io.Writer, message string) {
+func writeSSEError(ctx *hertzapp.RequestContext, message string) {
 	event := models.SSEEvent{
 		Type: "error",
 		Error: &models.ErrorDetail{
@@ -471,5 +386,5 @@ func writeSSEError(w io.Writer, message string) {
 			Message: message,
 		},
 	}
-	writeSSE(w, event)
+	writeSSE(ctx, event)
 }

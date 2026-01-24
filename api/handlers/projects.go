@@ -1,21 +1,29 @@
 package handlers
 
 import (
-	"encoding/json"
-	"net/http"
-	"net/url"
+	"context"
 	"path/filepath"
-	"strings"
 
 	"github.com/charmbracelet/crush/api/models"
 	"github.com/charmbracelet/crush/internal/projects"
+	hertzapp "github.com/cloudwego/hertz/pkg/app"
+	"github.com/cloudwego/hertz/pkg/protocol/consts"
 )
 
 // HandleListProjects 处理获取所有项目的请求
-func (h *Handlers) HandleListProjects(w http.ResponseWriter, r *http.Request) {
+//
+//	@Summary		获取项目列表
+//	@Description	获取所有已注册的项目
+//	@Tags			Project
+//	@Accept			json
+//	@Produce		json
+//	@Success		200	{object}	models.ProjectsResponse
+//	@Failure		500	{object}	map[string]interface{}
+//	@Router			/project [get]
+func (h *Handlers) HandleListProjects(c context.Context, ctx *hertzapp.RequestContext) {
 	projectList, err := projects.List()
 	if err != nil {
-		WriteError(w, "INTERNAL_ERROR", "Failed to list projects: "+err.Error(), http.StatusInternalServerError)
+		WriteError(c, ctx, "INTERNAL_ERROR", "Failed to list projects: "+err.Error(), consts.StatusInternalServerError)
 		return
 	}
 
@@ -26,19 +34,30 @@ func (h *Handlers) HandleListProjects(w http.ResponseWriter, r *http.Request) {
 		response.Projects[i] = models.ProjectToResponse(p)
 	}
 
-	WriteJSON(w, http.StatusOK, response)
+	WriteJSON(c, ctx, consts.StatusOK, response)
 }
 
 // HandleCreateProject 处理创建项目的请求
-func (h *Handlers) HandleCreateProject(w http.ResponseWriter, r *http.Request) {
+//
+//	@Summary		创建项目
+//	@Description	注册一个新项目
+//	@Tags			Project
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		models.CreateProjectRequest	true	"创建项目请求"
+//	@Success		201		{object}	models.CreateProjectResponse
+//	@Failure		400		{object}	map[string]interface{}
+//	@Failure		500		{object}	map[string]interface{}
+//	@Router			/project [post]
+func (h *Handlers) HandleCreateProject(c context.Context, ctx *hertzapp.RequestContext) {
 	var req models.CreateProjectRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		WriteError(w, "INVALID_REQUEST", "Invalid request body: "+err.Error(), http.StatusBadRequest)
+	if err := ctx.BindJSON(&req); err != nil {
+		WriteError(c, ctx, "INVALID_REQUEST", "Invalid request body: "+err.Error(), consts.StatusBadRequest)
 		return
 	}
 
 	if req.Path == "" {
-		WriteError(w, "INVALID_REQUEST", "Project path is required", http.StatusBadRequest)
+		WriteError(c, ctx, "INVALID_REQUEST", "Project path is required", consts.StatusBadRequest)
 		return
 	}
 
@@ -51,14 +70,14 @@ func (h *Handlers) HandleCreateProject(w http.ResponseWriter, r *http.Request) {
 
 	// 注册项目
 	if err := projects.Register(req.Path, dataDir); err != nil {
-		WriteError(w, "INTERNAL_ERROR", "Failed to register project: "+err.Error(), http.StatusInternalServerError)
+		WriteError(c, ctx, "INTERNAL_ERROR", "Failed to register project: "+err.Error(), consts.StatusInternalServerError)
 		return
 	}
 
 	// 获取注册后的项目信息
 	projectList, err := projects.List()
 	if err != nil {
-		WriteError(w, "INTERNAL_ERROR", "Failed to get project: "+err.Error(), http.StatusInternalServerError)
+		WriteError(c, ctx, "INTERNAL_ERROR", "Failed to get project: "+err.Error(), consts.StatusInternalServerError)
 		return
 	}
 
@@ -71,7 +90,7 @@ func (h *Handlers) HandleCreateProject(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if project == nil {
-		WriteError(w, "INTERNAL_ERROR", "Project registered but not found", http.StatusInternalServerError)
+		WriteError(c, ctx, "INTERNAL_ERROR", "Project registered but not found", consts.StatusInternalServerError)
 		return
 	}
 
@@ -79,35 +98,5 @@ func (h *Handlers) HandleCreateProject(w http.ResponseWriter, r *http.Request) {
 		Project: models.ProjectToResponse(*project),
 	}
 
-	WriteJSON(w, http.StatusCreated, response)
-}
-
-// extractProjectPath 从 URL 中提取项目路径
-func extractProjectPath(r *http.Request) (string, error) {
-	// URL 格式: /api/v1/projects/{project_path}/sessions
-	// project_path 需要 URL 解码
-	path := r.URL.Path
-	prefix := "/api/v1/projects/"
-	if !strings.HasPrefix(path, prefix) {
-		return "", http.ErrMissingFile
-	}
-
-	// 移除前缀
-	rest := path[len(prefix):]
-
-	// 找到 /sessions 的位置
-	idx := strings.Index(rest, "/sessions")
-	if idx == -1 {
-		return "", http.ErrMissingFile
-	}
-
-	projectPath := rest[:idx]
-
-	// URL 解码
-	decoded, err := url.PathUnescape(projectPath)
-	if err != nil {
-		return "", err
-	}
-
-	return decoded, nil
+	WriteJSON(c, ctx, consts.StatusCreated, response)
 }

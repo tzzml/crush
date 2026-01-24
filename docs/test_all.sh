@@ -29,7 +29,7 @@ SERVER_PID=$!
 # 等待服务器启动
 echo "⏳ 等待服务器启动..."
 for i in {1..10}; do
-    if curl -s http://localhost:8080/api/v1/health >/dev/null 2>&1; then
+    if curl -s http://localhost:8080/health >/dev/null 2>&1; then
         echo "✅ 服务器运行正常 (PID: $SERVER_PID)"
         break
     fi
