@@ -72,7 +72,7 @@ func (h *Handlers) HandleListMessages(c context.Context, ctx *hertzapp.RequestCo
 //	@Tags			Message
 //	@Accept			json
 //	@Produce		json
-//	@Param			project		query		string						true	"项目路径"
+//	@Param			directory		query		string						true	"项目路径"
 //	@Param			session_id	path		string						true	"会话ID"
 //	@Param			request		body		models.CreateMessageRequest	true	"创建消息请求"
 //	@Success		200			{object}	models.CreateMessageResponse

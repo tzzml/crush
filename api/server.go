@@ -55,6 +55,8 @@ func (s *Server) Start() error {
 	s.GET("/", handlers.HandleIndexRedirect)
 	s.GET("/swagger", handlers.HandleSwaggerUI)
 	s.GET("/swagger/doc.json", handlers.HandleSwaggerJSON)
+	s.GET("/swagger/openapi3.json", handlers.HandleOpenAPI3JSON) // OpenAPI 3.0
+	s.GET("/redoc", handlers.HandleRedoc) // Redoc UI with OpenAPI 3.0
 
 	// API 路由
 	{

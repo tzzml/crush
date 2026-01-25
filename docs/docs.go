@@ -968,7 +968,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "项目路径",
-                        "name": "project",
+                        "name": "directory",
                         "in": "query",
                         "required": true
                     },
@@ -1121,7 +1121,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "项目路径",
-                        "name": "project",
+                        "name": "directory",
                         "in": "query",
                         "required": true
                     },
@@ -1344,7 +1344,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "项目路径",
-                        "name": "project",
+                        "name": "directory",
                         "in": "query",
                         "required": true
                     },

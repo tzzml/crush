@@ -1,10 +1,24 @@
-.PHONY: swagger run build clean dev test
+.PHONY: swagger swagger2 convert-openapi validate-openapi run build clean dev test
 
-# 生成 swagger 文档
-swagger:
-	@echo "Generating swagger docs..."
-	swag init -g cmd/server.go -o docs --parseDependency --parseInternal
-	@echo "✓ Swagger docs generated"
+# 从代码生成 Swagger 2.0 文档,然后转换为 OpenAPI 3.0
+swagger: swagger2 convert-openapi validate-openapi
+
+# 从代码生成 Swagger 2.0 文档
+swagger2:
+	@echo "Generating Swagger 2.0 docs from code..."
+	swag init -g cmd/server.go -o docs --parseDependency --parseInternal --outputTypes json,yaml
+	@echo "✓ Swagger 2.0 docs generated"
+
+# 将 Swagger 2.0 转换为 OpenAPI 3.0
+convert-openapi:
+	@echo "Converting to OpenAPI 3.0..."
+	@python3 scripts/convert_to_openapi3.py docs/swagger.json docs/openapi3.json
+	@echo "✓ OpenAPI 3.0 docs generated at docs/openapi3.json"
+
+# 验证 OpenAPI 3.0 文档
+validate-openapi:
+	@echo "Validating OpenAPI 3.0 docs..."
+	@scripts/validate_openapi3.sh
 
 # 运行服务器
 run:
@@ -20,7 +34,7 @@ build:
 clean:
 	@echo "Cleaning..."
 	rm -rf bin/
-	rm -f docs/docs.go docs/swagger.json docs/swagger.yaml
+	rm -f docs/docs.go docs/swagger.json docs/swagger.yaml docs/openapi3.json
 
 # 开发模式（生成文档 + 运行）
 dev: swagger run

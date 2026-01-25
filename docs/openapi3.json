@@ -1,0 +1,2207 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "description": "AI 项目管理 API 服务",
+    "title": "Zork Agent API",
+    "termsOfService": "http://swagger.io/terms/",
+    "contact": {
+      "name": "API Support",
+      "url": "http://www.swagger.io/support",
+      "email": "support@swagger.io"
+    },
+    "license": {
+      "name": "Apache 2.0",
+      "url": "http://www.apache.org/licenses/LICENSE-2.0.html"
+    },
+    "version": "1.0"
+  },
+  "paths": {
+    "/event": {
+      "get": {
+        "tags": [
+          "Event"
+        ],
+        "summary": "服务器发送事件",
+        "description": "订阅项目的实时事件流",
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "description": "项目路径",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Event stream",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/file": {
+      "get": {
+        "tags": [
+          "File"
+        ],
+        "summary": "列出目录内容",
+        "description": "列出指定目录的文件和子目录",
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "description": "项目路径",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "description": "子目录路径（相对于项目根目录）",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "recursive",
+            "in": "query",
+            "description": "是否递归列出（默认 false）",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/models.FileListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/file/content": {
+      "get": {
+        "tags": [
+          "File"
+        ],
+        "summary": "读取文件内容",
+        "description": "读取指定文件的内容",
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "description": "项目路径",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "description": "文件路径（相对于项目根目录）",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "起始行号（可选）",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "读取行数限制（可选）",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/models.FileContentResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/file/status": {
+      "get": {
+        "tags": [
+          "File"
+        ],
+        "summary": "获取 Git 状态",
+        "description": "获取项目的 Git 状态信息",
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "description": "项目路径",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/models.GitStatusResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/find": {
+      "get": {
+        "tags": [
+          "File"
+        ],
+        "summary": "搜索文本内容",
+        "description": "在项目中搜索文本内容，支持正则表达式",
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "description": "项目路径",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "description": "搜索内容",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "regex",
+            "in": "query",
+            "description": "是否使用正则表达式（默认 false）",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "case_insensitive",
+            "in": "query",
+            "description": "是否忽略大小写（默认 false）",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/models.SearchResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/find/file": {
+      "get": {
+        "tags": [
+          "File"
+        ],
+        "summary": "搜索文件名",
+        "description": "使用通配符模式搜索文件",
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "description": "项目路径",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pattern",
+            "in": "query",
+            "description": "文件名模式（支持通配符）",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/models.FileListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/global/dispose": {
+      "post": {
+        "tags": [
+          "Global"
+        ],
+        "summary": "释放所有项目",
+        "description": "释放所有项目的 app 实例以释放资源",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/models.DisposeAllResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/instance/dispose": {
+      "post": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "释放实例",
+        "description": "释放指定项目的 app 实例以释放资源",
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "description": "项目路径",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/models.DisposeProjectResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lsp": {
+      "get": {
+        "tags": [
+          "LSP"
+        ],
+        "summary": "获取 LSP 状态",
+        "description": "获取所有 LSP 服务器的状态",
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "description": "项目路径",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/models.LSPStatus"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/mcp": {
+      "get": {
+        "tags": [
+          "MCP"
+        ],
+        "summary": "获取 MCP 状态",
+        "description": "获取所有 Model Context Protocol (MCP) 服务器的状态",
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "description": "项目路径",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "$ref": "#/components/schemas/models.MCPStatus"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/message/{id}": {
+      "get": {
+        "tags": [
+          "Message"
+        ],
+        "summary": "获取消息详情",
+        "description": "获取指定消息的详细信息",
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "description": "项目路径",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "description": "消息ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/models.MessageDetailResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/path": {
+      "get": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "获取路径信息",
+        "description": "获取当前工作目录和相关路径信息",
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "description": "项目路径",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/project": {
+      "get": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "获取项目列表",
+        "description": "获取所有已注册的项目",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/models.ProjectsResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "创建项目",
+        "description": "注册一个新项目",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/models.CreateProjectRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/models.CreateProjectResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/project/config": {
+      "get": {
+        "tags": [
+          "Config"
+        ],
+        "summary": "获取项目配置",
+        "description": "获取指定项目的配置信息",
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "description": "项目路径",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/models.ConfigResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/project/current": {
+      "get": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "获取当前项目",
+        "description": "获取当前活跃的项目。提供 directory 参数时返回该目录的项目，否则返回最近访问的项目",
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "description": "项目路径（可选，不传则返回最近访问的项目）",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/models.CurrentProjectResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "没有可用的项目",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "服务器内部错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/project/permissions": {
+      "get": {
+        "tags": [
+          "Permission"
+        ],
+        "summary": "获取权限请求列表",
+        "description": "获取指定项目的权限请求列表",
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "description": "项目路径",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/models.PermissionsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/project/permissions/{id}/reply": {
+      "post": {
+        "tags": [
+          "Permission"
+        ],
+        "summary": "回复权限请求",
+        "description": "批准或拒绝特定的权限请求",
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "description": "项目路径",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "description": "权限请求ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/models.PermissionReplyRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/session": {
+      "get": {
+        "tags": [
+          "Session"
+        ],
+        "summary": "获取会话列表",
+        "description": "获取指定项目的所有会话",
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "description": "项目路径",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/models.SessionsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Session"
+        ],
+        "summary": "创建会话",
+        "description": "在指定项目中创建新会话",
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "description": "项目路径",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/models.CreateSessionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/models.CreateSessionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/session/status": {
+      "get": {
+        "tags": [
+          "Session"
+        ],
+        "summary": "获取会话状态",
+        "description": "获取项目的会话状态信息",
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "description": "项目路径",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/session/{id}": {
+      "get": {
+        "tags": [
+          "Session"
+        ],
+        "summary": "获取会话详情",
+        "description": "获取指定会话的详细信息",
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "description": "项目路径",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "description": "会话ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/models.SessionDetailResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Session"
+        ],
+        "summary": "更新会话",
+        "description": "更新指定会话的信息",
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "description": "项目路径",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "description": "会话ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/models.UpdateSessionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/models.UpdateSessionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Session"
+        ],
+        "summary": "删除会话",
+        "description": "删除指定的会话及其所有消息",
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "description": "项目路径",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "description": "会话ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/session/{session_id}/abort": {
+      "post": {
+        "tags": [
+          "Session"
+        ],
+        "summary": "中止会话",
+        "description": "中止指定会话的 AI 处理",
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "description": "项目路径",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "会话ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/session/{session_id}/message": {
+      "get": {
+        "tags": [
+          "Message"
+        ],
+        "summary": "获取消息列表",
+        "description": "获取指定会话的所有消息",
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "description": "项目路径",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "会话ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/models.MessagesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Message"
+        ],
+        "summary": "创建消息",
+        "description": "在指定会话中创建新消息，支持同步和流式响应",
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "description": "项目路径",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "会话ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/models.CreateMessageRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/models.CreateMessageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "models.ConfigResponse": {
+        "type": "object",
+        "properties": {
+          "configured": {
+            "type": "boolean"
+          },
+          "data_dir": {
+            "type": "string"
+          },
+          "debug": {
+            "type": "boolean"
+          },
+          "providers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/models.ProviderInfo"
+            }
+          },
+          "working_dir": {
+            "type": "string"
+          }
+        }
+      },
+      "models.CreateMessageRequest": {
+        "type": "object",
+        "properties": {
+          "prompt": {
+            "type": "string"
+          },
+          "stream": {
+            "type": "boolean"
+          }
+        }
+      },
+      "models.CreateMessageResponse": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "$ref": "#/components/schemas/models.MessageResponse"
+          },
+          "session": {
+            "$ref": "#/components/schemas/models.SessionResponse"
+          }
+        }
+      },
+      "models.CreateProjectRequest": {
+        "type": "object",
+        "properties": {
+          "data_dir": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          }
+        }
+      },
+      "models.CreateProjectResponse": {
+        "type": "object",
+        "properties": {
+          "project": {
+            "$ref": "#/components/schemas/models.ProjectResponse"
+          }
+        }
+      },
+      "models.CreateSessionRequest": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          }
+        }
+      },
+      "models.CreateSessionResponse": {
+        "type": "object",
+        "properties": {
+          "session": {
+            "$ref": "#/components/schemas/models.SessionResponse"
+          }
+        }
+      },
+      "models.CurrentProjectResponse": {
+        "type": "object",
+        "properties": {
+          "project": {
+            "$ref": "#/components/schemas/models.ProjectResponse"
+          }
+        }
+      },
+      "models.DisposeAllResponse": {
+        "type": "object",
+        "properties": {
+          "disposed_count": {
+            "type": "integer"
+          },
+          "projects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "models.DisposeProjectResponse": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "project_path": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "models.FileContentResponse": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string"
+          },
+          "encoding": {
+            "description": "\"utf8\", \"base64\" for images",
+            "type": "string"
+          },
+          "is_binary": {
+            "type": "boolean"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "lines": {
+            "description": "行数（如果是文本文件）",
+            "type": "integer"
+          },
+          "offset": {
+            "type": "integer"
+          },
+          "path": {
+            "type": "string"
+          }
+        }
+      },
+      "models.FileInfo": {
+        "type": "object",
+        "properties": {
+          "children": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/models.FileInfo"
+            }
+          },
+          "mod_time": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer"
+          },
+          "type": {
+            "description": "\"file\" or \"directory\"",
+            "type": "string"
+          }
+        }
+      },
+      "models.FileListResponse": {
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "integer"
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/models.FileInfo"
+            }
+          },
+          "path": {
+            "type": "string"
+          }
+        }
+      },
+      "models.GitFileStatus": {
+        "type": "object",
+        "properties": {
+          "old_path": {
+            "description": "for renamed files",
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "status": {
+            "description": "\"modified\", \"added\", \"deleted\", \"renamed\", \"untracked\"",
+            "type": "string"
+          }
+        }
+      },
+      "models.GitStatusResponse": {
+        "type": "object",
+        "properties": {
+          "branch": {
+            "type": "string"
+          },
+          "deleted": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/models.GitFileStatus"
+            }
+          },
+          "head": {
+            "type": "string"
+          },
+          "is_clean": {
+            "type": "boolean"
+          },
+          "modified": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/models.GitFileStatus"
+            }
+          },
+          "staged": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/models.GitFileStatus"
+            }
+          },
+          "untracked": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/models.GitFileStatus"
+            }
+          }
+        }
+      },
+      "models.LSPStatus": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "root": {
+            "type": "string"
+          },
+          "status": {
+            "description": "\"connected\" or \"error\"",
+            "type": "string"
+          }
+        }
+      },
+      "models.MCPStatus": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "models.MessageDetailResponse": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "$ref": "#/components/schemas/models.MessageResponse"
+          }
+        }
+      },
+      "models.MessageResponse": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "integer"
+          },
+          "finish_reason": {
+            "type": "string"
+          },
+          "finished_at": {
+            "type": "integer"
+          },
+          "id": {
+            "type": "string"
+          },
+          "is_summary_message": {
+            "type": "boolean"
+          },
+          "model": {
+            "type": "string"
+          },
+          "parts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "provider": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "session_id": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "integer"
+          }
+        }
+      },
+      "models.MessagesResponse": {
+        "type": "object",
+        "properties": {
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/models.MessageResponse"
+            }
+          },
+          "total": {
+            "type": "integer"
+          }
+        }
+      },
+      "models.PermissionReplyRequest": {
+        "type": "object",
+        "properties": {
+          "granted": {
+            "type": "boolean"
+          },
+          "persistent": {
+            "type": "boolean"
+          }
+        }
+      },
+      "models.PermissionRequest": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "params": {},
+          "path": {
+            "type": "string"
+          },
+          "session_id": {
+            "type": "string"
+          },
+          "tool_call_id": {
+            "type": "string"
+          },
+          "tool_name": {
+            "type": "string"
+          }
+        }
+      },
+      "models.PermissionsResponse": {
+        "type": "object",
+        "properties": {
+          "pending": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/models.PermissionRequest"
+            }
+          },
+          "skip_requests": {
+            "type": "boolean"
+          }
+        }
+      },
+      "models.ProjectResponse": {
+        "type": "object",
+        "properties": {
+          "data_dir": {
+            "type": "string"
+          },
+          "last_accessed": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          }
+        }
+      },
+      "models.ProjectsResponse": {
+        "type": "object",
+        "properties": {
+          "projects": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/models.ProjectResponse"
+            }
+          }
+        }
+      },
+      "models.ProviderInfo": {
+        "type": "object",
+        "properties": {
+          "configured": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        }
+      },
+      "models.SearchResponse": {
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "integer"
+          },
+          "query": {
+            "type": "string"
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/models.SearchResultItem"
+            }
+          }
+        }
+      },
+      "models.SearchResultItem": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string"
+          },
+          "line": {
+            "type": "integer"
+          },
+          "match_end": {
+            "type": "integer"
+          },
+          "match_start": {
+            "type": "integer"
+          },
+          "path": {
+            "type": "string"
+          }
+        }
+      },
+      "models.SessionDetailResponse": {
+        "type": "object",
+        "properties": {
+          "session": {
+            "$ref": "#/components/schemas/models.SessionResponse"
+          }
+        }
+      },
+      "models.SessionResponse": {
+        "type": "object",
+        "properties": {
+          "completion_tokens": {
+            "type": "integer"
+          },
+          "cost": {
+            "type": "number"
+          },
+          "created_at": {
+            "type": "integer"
+          },
+          "id": {
+            "type": "string"
+          },
+          "message_count": {
+            "type": "integer"
+          },
+          "parent_session_id": {
+            "type": "string"
+          },
+          "prompt_tokens": {
+            "type": "integer"
+          },
+          "summary_message_id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "todos": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/models.TodoResponse"
+            }
+          },
+          "updated_at": {
+            "type": "integer"
+          }
+        }
+      },
+      "models.SessionsResponse": {
+        "type": "object",
+        "properties": {
+          "sessions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/models.SessionResponse"
+            }
+          },
+          "total": {
+            "type": "integer"
+          }
+        }
+      },
+      "models.TodoResponse": {
+        "type": "object",
+        "properties": {
+          "active_form": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "models.UpdateSessionRequest": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          }
+        }
+      },
+      "models.UpdateSessionResponse": {
+        "type": "object",
+        "properties": {
+          "session": {
+            "$ref": "#/components/schemas/models.SessionResponse"
+          }
+        }
+      }
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8080/"
+    },
+    {
+      "url": "https://localhost:8080/"
+    }
+  ]
+}

@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"net/http"
+	"os"
 
 	hertzapp "github.com/cloudwego/hertz/pkg/app"
 	"github.com/swaggo/swag"
@@ -58,6 +59,24 @@ func HandleSwaggerUI(c context.Context, ctx *hertzapp.RequestContext) {
 	ctx.Response.SetBody([]byte(SwaggerHTML))
 }
 
+// RedocHTML 是 Redoc 的 HTML 页面 (使用 OpenAPI 3.0)
+const RedocHTML = `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Documentation - Redoc</title>
+    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/redoc@2.0.0/bundles/redoc.min.css">
+    <style>
+        body { margin: 0; padding: 0; }
+    </style>
+</head>
+<body>
+    <redoc spec-url="/swagger/openapi3.json"></redoc>
+    <script src="https://cdn.jsdelivr.net/npm/redoc@2.0.0/bundles/redoc.standalone.js"></script>
+</body>
+</html>`
+
 // HandleSwaggerJSON 处理 GET /swagger/doc.json 请求
 func HandleSwaggerJSON(c context.Context, ctx *hertzapp.RequestContext) {
 	doc, err := swag.ReadDoc("swagger")
@@ -73,4 +92,26 @@ func HandleSwaggerJSON(c context.Context, ctx *hertzapp.RequestContext) {
 // HandleIndexRedirect 处理 GET / 请求
 func HandleIndexRedirect(c context.Context, ctx *hertzapp.RequestContext) {
 	ctx.Redirect(http.StatusFound, []byte("/swagger"))
+}
+
+// HandleOpenAPI3JSON 处理 GET /swagger/openapi3.json 请求
+// 返回 OpenAPI 3.0 规范的文档
+func HandleOpenAPI3JSON(c context.Context, ctx *hertzapp.RequestContext) {
+	// 读取 openapi3.json 文件
+	content, err := os.ReadFile("docs/openapi3.json")
+	if err != nil {
+		ctx.JSON(500, map[string]string{"error": "failed to read openapi3 doc: " + err.Error()})
+		return
+	}
+
+	ctx.SetStatusCode(200)
+	ctx.SetContentType("application/json; charset=utf-8")
+	ctx.Response.SetBody(content)
+}
+
+// HandleRedoc 处理 GET /redoc 请求
+// 返回使用 OpenAPI 3.0 的 Redoc UI
+func HandleRedoc(c context.Context, ctx *hertzapp.RequestContext) {
+	ctx.SetContentType("text/html; charset=utf-8")
+	ctx.Response.SetBody([]byte(RedocHTML))
 }

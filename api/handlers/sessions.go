@@ -24,6 +24,7 @@ import (
 //	@Router			/session [get]
 func (h *Handlers) HandleListSessions(c context.Context, ctx *app.RequestContext) {
 	projectPath := string(ctx.Query("directory"))
+	slog.Info("HandleListSessions called", "project", projectPath)
 	if projectPath == "" {
 		WriteError(c, ctx, "MISSING_DIRECTORY_PARAM", "Directory query parameter is required", consts.StatusBadRequest)
 		return
@@ -32,6 +33,7 @@ func (h *Handlers) HandleListSessions(c context.Context, ctx *app.RequestContext
 	// 获取项目的 app 实例
 	appInstance, err := h.GetAppForProject(c, projectPath)
 	if err != nil {
+		slog.Error("Failed to get app instance", "project", projectPath, "error", err)
 		if strings.Contains(err.Error(), "project not found") {
 			WriteError(c, ctx, "PROJECT_NOT_FOUND", err.Error(), consts.StatusNotFound)
 			return
@@ -39,6 +41,8 @@ func (h *Handlers) HandleListSessions(c context.Context, ctx *app.RequestContext
 		WriteError(c, ctx, "INTERNAL_ERROR", "Failed to get or create app for project: "+err.Error(), consts.StatusInternalServerError)
 		return
 	}
+
+	slog.Info("Got app instance, listing sessions", "project", projectPath)
 
 	// 获取所有会话
 	sessions, err := appInstance.Sessions.List(c)
@@ -65,7 +69,7 @@ func (h *Handlers) HandleListSessions(c context.Context, ctx *app.RequestContext
 //	@Tags			Session
 //	@Accept			json
 //	@Produce		json
-//	@Param			project		query		string						true	"项目路径"
+//	@Param			directory		query		string						true	"项目路径"
 //	@Param			request		body		models.CreateSessionRequest	true	"创建会话请求"
 //	@Success		201			{object}	models.CreateSessionResponse
 //	@Failure		400			{object}	map[string]interface{}
@@ -213,7 +217,7 @@ func (h *Handlers) HandleDeleteSession(c context.Context, ctx *app.RequestContex
 //	@Tags			Session
 //	@Accept			json
 //	@Produce		json
-//	@Param			project		query		string							true	"项目路径"
+//	@Param			directory		query		string							true	"项目路径"
 //	@Param			id			path		string							true	"会话ID"
 //	@Param			request		body		models.UpdateSessionRequest	true	"更新会话请求"
 //	@Success		200			{object}	models.UpdateSessionResponse
