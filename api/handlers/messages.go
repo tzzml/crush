@@ -123,20 +123,7 @@ func (h *Handlers) HandleCreateMessage(c context.Context, ctx *hertzapp.RequestC
 
 // handleSyncMessage 处理同步消息响应
 func (h *Handlers) handleSyncMessage(c context.Context, ctx *hertzapp.RequestContext, sessionID, prompt string, appInstance *internalapp.App) {
-	// 创建用户消息
-	_, err := appInstance.Messages.Create(c, sessionID, message.CreateMessageParams{
-		Role:             message.User,
-		Parts:            []message.ContentPart{message.TextContent{Text: prompt}},
-		Model:            "",
-		Provider:         "",
-		IsSummaryMessage: false,
-	})
-	if err != nil {
-		WriteError(c, ctx, "INTERNAL_ERROR", "Failed to create user message: "+err.Error(), consts.StatusInternalServerError)
-		return
-	}
-
-	// 运行 AI
+	// 运行 AI（AgentCoordinator 内部会创建用户消息）
 	done := make(chan struct {
 		result interface{}
 		err    error
@@ -218,27 +205,13 @@ func (h *Handlers) handleStreamMessage(c context.Context, ctx *hertzapp.RequestC
 	ctx.Response.Header.Set("Connection", "keep-alive")
 	ctx.Response.Header.Set("X-Accel-Buffering", "no") // 禁用 nginx 缓冲
 
-	// 创建用户消息
-	userMsg, err := appInstance.Messages.Create(c, sessionID, message.CreateMessageParams{
-		Role:             message.User,
-		Parts:            []message.ContentPart{message.TextContent{Text: prompt}},
-		Model:            "",
-		Provider:         "",
-		IsSummaryMessage: false,
-	})
-	if err != nil {
-		writeSSEError(ctx, "Failed to create user message: "+err.Error())
-		return
-	}
-
-	// 发送开始事件
+	// 发送开始事件（用户消息 ID 暂时为空，等 AgentCoordinator 创建后会通过事件更新）
 	writeSSE(ctx, models.SSEEvent{
-		Type:      "start",
-		MessageID: userMsg.ID,
+		Type: "start",
 	})
 	ctx.Flush()
 
-	// 运行 AI
+	// 运行 AI（AgentCoordinator 内部会创建用户消息）
 	done := make(chan struct {
 		result interface{}
 		err    error
