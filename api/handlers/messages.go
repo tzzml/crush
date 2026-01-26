@@ -65,36 +65,36 @@ func (h *Handlers) HandleListMessages(c context.Context, ctx *hertzapp.RequestCo
 	WriteJSON(c, ctx, consts.StatusOK, response)
 }
 
-// HandleCreateMessage 处理发送消息的请求（支持同步和流式）
+// HandlePrompt 处理发送消息的请求（Opencode SDK 兼容）
 //
-//	@Summary		创建消息
-//	@Description	在指定会话中创建新消息，支持同步和流式响应
-//	@Tags			Message
+//	@Summary		Send message (Opencode compatible)
+//	@Description	Create and send a new message to a session using Opencode SDK compatible API
+//	@Tags			Session
 //	@Accept			json
 //	@Produce		json
-//	@Param			directory		query		string						true	"项目路径"
-//	@Param			session_id	path		string						true	"会话ID"
-//	@Param			request		body		models.CreateMessageRequest	true	"创建消息请求"
-//	@Success		200			{object}	models.CreateMessageResponse
+//	@Param			directory	query		string					true	"Project path"
+//	@Param			sessionID	path		string					true	"Session ID"
+//	@Param			request		body		models.PromptRequest	true	"Prompt request"
+//	@Success		200			{object}	models.PromptResponse
 //	@Failure		400			{object}	map[string]interface{}
 //	@Failure		404			{object}	map[string]interface{}
-//	@Router			/session/{session_id}/message [post]
-func (h *Handlers) HandleCreateMessage(c context.Context, ctx *hertzapp.RequestContext) {
+//	@Router			/session/{sessionID}/prompt [post]
+func (h *Handlers) HandlePrompt(c context.Context, ctx *hertzapp.RequestContext) {
 	projectPath := string(ctx.Query("directory"))
 	if projectPath == "" {
 		WriteError(c, ctx, "MISSING_DIRECTORY_PARAM", "Directory query parameter is required", consts.StatusBadRequest)
 		return
 	}
-	sessionID := ctx.Param("session_id")
+	sessionID := ctx.Param("sessionID")
 
-	var req models.CreateMessageRequest
+	var req models.PromptRequest
 	if err := ctx.BindJSON(&req); err != nil {
 		WriteError(c, ctx, "INVALID_REQUEST", "Invalid request body: "+err.Error(), consts.StatusBadRequest)
 		return
 	}
 
-	if req.Prompt == "" {
-		WriteError(c, ctx, "INVALID_REQUEST", "Prompt is required", consts.StatusBadRequest)
+	if len(req.Parts) == 0 {
+		WriteError(c, ctx, "INVALID_REQUEST", "Parts array is required", consts.StatusBadRequest)
 		return
 	}
 
@@ -112,17 +112,20 @@ func (h *Handlers) HandleCreateMessage(c context.Context, ctx *hertzapp.RequestC
 	// 自动批准权限请求
 	appInstance.Permissions.AutoApproveSession(sessionID)
 
-	if req.Stream {
-		// 流式响应
-		h.handleStreamMessage(c, ctx, sessionID, req.Prompt, appInstance)
+	// 从 Parts 中提取 prompt 文本
+	promptText := models.ExtractPromptTextFromParts(req.Parts)
+
+	if req.NoReply {
+		// NoReply 模式 - 仅创建用户消息，不运行 AI
+		h.handleNoReplyPrompt(c, ctx, sessionID, req, appInstance)
 	} else {
-		// 同步响应
-		h.handleSyncMessage(c, ctx, sessionID, req.Prompt, appInstance)
+		// 运行 AI 并获取响应
+		h.handleSyncPrompt(c, ctx, sessionID, promptText, appInstance)
 	}
 }
 
-// handleSyncMessage 处理同步消息响应
-func (h *Handlers) handleSyncMessage(c context.Context, ctx *hertzapp.RequestContext, sessionID, prompt string, appInstance *internalapp.App) {
+// handleSyncPrompt 处理同步消息响应（Opencode 兼容）
+func (h *Handlers) handleSyncPrompt(c context.Context, ctx *hertzapp.RequestContext, sessionID, prompt string, appInstance *internalapp.App) {
 	// 运行 AI（AgentCoordinator 内部会创建用户消息）
 	done := make(chan struct {
 		result interface{}
@@ -186,13 +189,35 @@ func (h *Handlers) handleSyncMessage(c context.Context, ctx *hertzapp.RequestCon
 	}
 
 done:
-	// 获取更新后的会话信息
-	updatedSession, _ := appInstance.Sessions.Get(c, sessionID)
+	// 使用 Opencode 兼容的响应格式
+	response := models.MessageToPromptResponse(assistantMsg)
 
-	response := models.CreateMessageResponse{
-		Message: models.MessageToResponse(assistantMsg),
-		Session: models.SessionToResponse(updatedSession),
+	WriteJSON(c, ctx, consts.StatusOK, response)
+}
+
+// handleNoReplyPrompt 处理 NoReply 模式的消息（仅创建用户消息）
+func (h *Handlers) handleNoReplyPrompt(c context.Context, ctx *hertzapp.RequestContext, sessionID string, req models.PromptRequest, appInstance *internalapp.App) {
+	// 创建用户消息参数
+	params := message.CreateMessageParams{
+		Role:  message.User,
+		Parts: models.PartsToMessageParts(sessionID, req.Parts),
 	}
+
+	// 如果请求中指定了模型，使用它
+	if req.Model != nil {
+		params.Provider = req.Model.ProviderID
+		params.Model = req.Model.ModelID
+	}
+
+	// 保存消息
+	createdMsg, err := appInstance.Messages.Create(c, sessionID, params)
+	if err != nil {
+		WriteError(c, ctx, "INTERNAL_ERROR", "Failed to create message: "+err.Error(), consts.StatusInternalServerError)
+		return
+	}
+
+	// 返回创建的消息（使用 Opencode 格式）
+	response := models.MessageToPromptResponse(createdMsg)
 
 	WriteJSON(c, ctx, consts.StatusOK, response)
 }

@@ -1499,7 +1499,7 @@
         }
       }
     },
-    "/session/{session_id}/message": {
+    "/session/{sessionID}/message": {
       "get": {
         "tags": [
           "Message"
@@ -1517,7 +1517,7 @@
             }
           },
           {
-            "name": "session_id",
+            "name": "sessionID",
             "in": "path",
             "description": "会话ID",
             "required": true,
@@ -1560,27 +1560,30 @@
             }
           }
         }
-      },
+      }
+    },
+    "/session/{sessionID}/prompt": {
       "post": {
         "tags": [
-          "Message"
+          "Prompt"
         ],
-        "summary": "创建消息",
-        "description": "在指定会话中创建新消息，支持同步和流式响应",
+        "summary": "Send message (Opencode compatible)",
+        "description": "Create and send a new message to a session using Opencode SDK compatible API",
+        "operationId": "session.prompt",
         "parameters": [
           {
             "name": "directory",
             "in": "query",
-            "description": "项目路径",
+            "description": "Project path",
             "required": true,
             "schema": {
               "type": "string"
             }
           },
           {
-            "name": "session_id",
+            "name": "sessionID",
             "in": "path",
-            "description": "会话ID",
+            "description": "Session ID",
             "required": true,
             "schema": {
               "type": "string"
@@ -1592,7 +1595,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/models.CreateMessageRequest"
+                "$ref": "#/components/schemas/models.PromptRequest"
               }
             }
           }
@@ -1603,7 +1606,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/models.CreateMessageResponse"
+                  "$ref": "#/components/schemas/models.PromptResponse"
                 }
               }
             }
@@ -1626,6 +1629,138 @@
                 "schema": {
                   "type": "object",
                   "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/system-prompt": {
+      "get": {
+        "tags": [
+          "System Prompt"
+        ],
+        "summary": "获取系统提示词",
+        "description": "获取指定项目当前的系统提示词内容",
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "description": "项目路径",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/models.GetSystemPromptResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/map[string]interface{}"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/map[string]interface{}"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/map[string]interface{}"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "System Prompt"
+        ],
+        "summary": "更新系统提示词",
+        "description": "动态修改指定项目的系统提示词，无需重启服务。更新后立即对后续对话生效。",
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "description": "项目路径",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/models.UpdateSystemPromptRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/models.UpdateSystemPromptResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/map[string]interface{}"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/map[string]interface{}"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/map[string]interface{}"
                 }
               }
             }
@@ -1658,6 +1793,354 @@
             "type": "string"
           }
         }
+      },
+      "models.PromptRequest": {
+        "type": "object",
+        "properties": {
+          "messageID": {
+            "type": "string"
+          },
+          "model": {
+            "$ref": "#/components/schemas/models.ModelSpec"
+          },
+          "agent": {
+            "type": "string"
+          },
+          "noReply": {
+            "type": "boolean"
+          },
+          "parts": {
+            "type": "array",
+            "items": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "required": [
+                    "text"
+                  ],
+                  "properties": {
+                    "text": {
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "required": [
+                    "name",
+                    "data"
+                  ],
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "string",
+                      "description": "base64 encoded file data"
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "required": [
+                    "prompt"
+                  ],
+                  "properties": {
+                    "prompt": {
+                      "type": "string"
+                    },
+                    "agent": {
+                      "type": "string"
+                    },
+                    "model": {
+                      "$ref": "#/components/schemas/models.ModelSpec"
+                    },
+                    "command": {
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "required": [
+          "parts"
+        ]
+      },
+      "models.PromptResponse": {
+        "type": "object",
+        "properties": {
+          "info": {
+            "$ref": "#/components/schemas/models.AssistantMessage"
+          },
+          "parts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/models.Part"
+            }
+          }
+        },
+        "required": [
+          "info",
+          "parts"
+        ]
+      },
+      "models.AssistantMessage": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "sessionID": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "const": "assistant"
+          },
+          "time": {
+            "$ref": "#/components/schemas/models.MessageTime"
+          },
+          "parentID": {
+            "type": "string"
+          },
+          "modelID": {
+            "type": "string"
+          },
+          "providerID": {
+            "type": "string"
+          },
+          "agent": {
+            "type": "string"
+          },
+          "cost": {
+            "type": "number"
+          },
+          "tokens": {
+            "$ref": "#/components/schemas/models.TokenInfo"
+          },
+          "finish": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "sessionID",
+          "role",
+          "time"
+        ]
+      },
+      "models.MessageTime": {
+        "type": "object",
+        "properties": {
+          "created": {
+            "type": "integer"
+          },
+          "completed": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "created"
+        ]
+      },
+      "models.ModelSpec": {
+        "type": "object",
+        "properties": {
+          "providerID": {
+            "type": "string"
+          },
+          "modelID": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "providerID",
+          "modelID"
+        ]
+      },
+      "models.TokenInfo": {
+        "type": "object",
+        "properties": {
+          "input": {
+            "type": "integer"
+          },
+          "output": {
+            "type": "integer"
+          },
+          "reasoning": {
+            "type": "integer"
+          },
+          "cache": {
+            "$ref": "#/components/schemas/models.CacheTokenInfo"
+          }
+        },
+        "required": [
+          "input",
+          "output"
+        ]
+      },
+      "models.CacheTokenInfo": {
+        "type": "object",
+        "properties": {
+          "read": {
+            "type": "integer"
+          },
+          "write": {
+            "type": "integer"
+          }
+        }
+      },
+      "models.Part": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "type",
+              "text"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "text"
+              },
+              "id": {
+                "type": "string"
+              },
+              "sessionID": {
+                "type": "string"
+              },
+              "messageID": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "type",
+              "text"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "reasoning"
+              },
+              "id": {
+                "type": "string"
+              },
+              "sessionID": {
+                "type": "string"
+              },
+              "messageID": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              },
+              "time": {
+                "$ref": "#/components/schemas/models.MessageTime"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "type",
+              "name",
+              "data"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "file"
+              },
+              "id": {
+                "type": "string"
+              },
+              "sessionID": {
+                "type": "string"
+              },
+              "messageID": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "data": {
+                "type": "string",
+                "description": "base64 encoded file data"
+              },
+              "mimeType": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "type",
+              "name",
+              "input"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "tool"
+              },
+              "id": {
+                "type": "string"
+              },
+              "sessionID": {
+                "type": "string"
+              },
+              "messageID": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "input": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "type",
+              "name"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "tool_result"
+              },
+              "id": {
+                "type": "string"
+              },
+              "sessionID": {
+                "type": "string"
+              },
+              "messageID": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "output": {
+                "type": "string"
+              },
+              "error": {
+                "type": "string"
+              }
+            }
+          }
+        ]
       },
       "models.CreateMessageRequest": {
         "type": "object",
@@ -2191,6 +2674,52 @@
         "properties": {
           "session": {
             "$ref": "#/components/schemas/models.SessionResponse"
+          }
+        }
+      },
+      "models.GetSystemPromptResponse": {
+        "type": "object",
+        "properties": {
+          "system_prompt": {
+            "type": "string",
+            "description": "当前的系统提示词内容"
+          },
+          "length": {
+            "type": "integer",
+            "description": "系统提示词的字符数"
+          },
+          "is_custom": {
+            "type": "boolean",
+            "description": "是否为自定义提示词（非空表示已自定义）"
+          }
+        }
+      },
+      "models.UpdateSystemPromptRequest": {
+        "type": "object",
+        "required": [
+          "system_prompt"
+        ],
+        "properties": {
+          "system_prompt": {
+            "type": "string",
+            "description": "新的系统提示词内容"
+          }
+        }
+      },
+      "models.UpdateSystemPromptResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "description": "是否成功更新"
+          },
+          "system_prompt": {
+            "type": "string",
+            "description": "更新后的系统提示词内容"
+          },
+          "message": {
+            "type": "string",
+            "description": "操作结果消息（可选）"
           }
         }
       }

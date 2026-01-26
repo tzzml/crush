@@ -22,7 +22,7 @@ import (
 
 // HandleSSE 处理 Server-Sent Events 请求
 //
-//	@Summary		服务器发送事件
+//	@Summary		订阅服务器事件
 //	@Description	订阅项目的实时事件流
 //	@Tags			Event
 //	@Accept			json

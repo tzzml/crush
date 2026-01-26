@@ -71,6 +71,11 @@ func (s *Server) Start() error {
 		// 实例生命周期 - 释放单个项目实例
 		s.POST("/instance/dispose", s.handlers.HandleDisposeProject)
 		s.GET("/project/config", s.handlers.HandleGetConfig)
+
+		// 系统提示词管理
+		s.GET("/system-prompt", s.handlers.HandleGetSystemPrompt)
+		s.PUT("/system-prompt", s.handlers.HandleUpdateSystemPrompt)
+
 		s.GET("/project/permissions", s.handlers.HandleListPermissions)
 		s.POST("/project/permissions/:requestID/reply", s.handlers.HandleReplyPermission)
 
@@ -104,8 +109,8 @@ func (s *Server) Start() error {
 		s.GET("/session/status", s.handlers.HandleGetSessionStatus)
 
 		// 消息管理 - 使用查询参数指定项目
-		s.GET("/session/:session_id/message", s.handlers.HandleListMessages)
-		s.POST("/session/:session_id/message", s.handlers.HandleCreateMessage)
+		s.GET("/session/:sessionID/message", s.handlers.HandleListMessages)
+		s.POST("/session/:sessionID/prompt", s.handlers.HandlePrompt)
 		s.GET("/message/:id", s.handlers.HandleGetMessage)
 
 		// SSE 事件流 - 需要单独处理，跳过 JSON 中间件
