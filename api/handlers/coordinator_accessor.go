@@ -94,17 +94,30 @@ func (a *coordinatorAccessor) getSystemPrompt(coord agent.Coordinator) (string, 
 	// 使用反射来访问它
 	sessionAgentValue := reflect.ValueOf(sessionAgent)
 
-	// 如果是指针，解引用
+	slog.Debug("Got sessionAgent from getSessionAgent",
+		"type", sessionAgentValue.Type(),
+		"kind", sessionAgentValue.Kind())
+
+	// 如果是指针，需要解引用
+	// NewSessionAgent 返回 *sessionAgent，所以接口中持有的是指针
 	if sessionAgentValue.Kind() == reflect.Ptr {
 		sessionAgentValue = sessionAgentValue.Elem()
+		slog.Debug("Dereferenced pointer",
+			"type", sessionAgentValue.Type(),
+			"kind", sessionAgentValue.Kind())
 	}
 
 	// 查找 systemPrompt 字段
+	// sessionAgent 是一个结构体，可以直接访问其字段
 	systemPromptField := sessionAgentValue.FieldByName("systemPrompt")
 	if !systemPromptField.IsValid() {
 		return "", fmt.Errorf("systemPrompt field not found in sessionAgent struct. " +
 			"This may indicate that the internal implementation has changed")
 	}
+
+	slog.Debug("Found systemPrompt field",
+		"type", systemPromptField.Type(),
+		"kind", systemPromptField.Kind())
 
 	// systemPrompt 是 *csync.Value[string] 类型
 	// 我们需要调用它的 Get() 方法
@@ -129,8 +142,13 @@ func (a *coordinatorAccessor) getSystemPrompt(coord agent.Coordinator) (string, 
 			return "", fmt.Errorf("Get() method did not return a string")
 		}
 
-		slog.Debug("Successfully retrieved system prompt using unsafe",
-			"prompt_length", len(systemPrompt))
+		preview := systemPrompt
+		if len(systemPrompt) > 100 {
+			preview = systemPrompt[:100] + "..."
+		}
+		slog.Debug("Successfully retrieved system prompt",
+			"prompt_length", len(systemPrompt),
+			"prompt_preview", preview)
 
 		return systemPrompt, nil
 	}
