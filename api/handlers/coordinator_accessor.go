@@ -100,18 +100,22 @@ func (a *coordinatorAccessor) getSystemPrompt(coord agent.Coordinator) (string, 
 			"This may indicate that the internal implementation has changed")
 	}
 
-	// 获取 currentAgent 的值
-	var sessionAgentValue reflect.Value
-	if !currentAgentField.CanInterface() {
-		// 使用 unsafe 获取未导出字段的值
-		currentAgentPtr := unsafe.Pointer(currentAgentField.UnsafeAddr())
-		sessionAgentValue = reflect.NewAt(currentAgentField.Type(), currentAgentPtr).Elem()
-	} else {
-		sessionAgentValue = currentAgentField
+	// currentAgent 是一个接口类型，我们需要获取其指向的实际值
+	// 使用 unsafe 获取未导出字段的值
+	currentAgentPtr := unsafe.Pointer(currentAgentField.UnsafeAddr())
+
+	// 创建一个新的 reflect.Value 来指向实际的对象
+	// 这里 currentAgent 是 *sessionAgent 类型的接口
+	currentAgentValue := reflect.NewAt(currentAgentField.Type(), currentAgentPtr).Elem()
+
+	// 现在当前 currentAgentValue 是具体的 *sessionAgent 类型
+	// 我们需要再次解引用来获取 sessionAgent 本身
+	if currentAgentValue.Kind() == reflect.Ptr {
+		currentAgentValue = currentAgentValue.Elem()
 	}
 
 	// 查找 systemPrompt 字段
-	systemPromptField := sessionAgentValue.FieldByName("systemPrompt")
+	systemPromptField := currentAgentValue.FieldByName("systemPrompt")
 	if !systemPromptField.IsValid() {
 		return "", fmt.Errorf("systemPrompt field not found in sessionAgent struct. " +
 			"This may indicate that the internal implementation has changed")
