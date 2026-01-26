@@ -84,38 +84,23 @@ func (a *coordinatorAccessor) getSessionAgent(coord agent.Coordinator) (agent.Se
 //   - string: 当前的系统提示词
 //   - error: 如果访问失败，返回详细错误信息
 func (a *coordinatorAccessor) getSystemPrompt(coord agent.Coordinator) (string, error) {
-	// 获取 coordinator 的反射值
-	v := reflect.ValueOf(coord)
-	if v.Kind() != reflect.Ptr {
-		return "", fmt.Errorf("coordinator is not a pointer, got: %v", v.Kind())
+	// 使用 getSessionAgent 获取具体的 sessionAgent 实例
+	sessionAgent, err := a.getSessionAgent(coord)
+	if err != nil {
+		return "", err
 	}
 
-	// 解引用指针
-	v = v.Elem()
+	// 现在我们有了具体的 sessionAgent 实例
+	// 使用反射来访问它
+	sessionAgentValue := reflect.ValueOf(sessionAgent)
 
-	// 查找 currentAgent 字段
-	currentAgentField := v.FieldByName("currentAgent")
-	if !currentAgentField.IsValid() {
-		return "", fmt.Errorf("currentAgent field not found in coordinator struct. " +
-			"This may indicate that the internal implementation has changed")
-	}
-
-	// currentAgent 是一个接口类型，我们需要获取其指向的实际值
-	// 使用 unsafe 获取未导出字段的值
-	currentAgentPtr := unsafe.Pointer(currentAgentField.UnsafeAddr())
-
-	// 创建一个新的 reflect.Value 来指向实际的对象
-	// 这里 currentAgent 是 *sessionAgent 类型的接口
-	currentAgentValue := reflect.NewAt(currentAgentField.Type(), currentAgentPtr).Elem()
-
-	// 现在当前 currentAgentValue 是具体的 *sessionAgent 类型
-	// 我们需要再次解引用来获取 sessionAgent 本身
-	if currentAgentValue.Kind() == reflect.Ptr {
-		currentAgentValue = currentAgentValue.Elem()
+	// 如果是指针，解引用
+	if sessionAgentValue.Kind() == reflect.Ptr {
+		sessionAgentValue = sessionAgentValue.Elem()
 	}
 
 	// 查找 systemPrompt 字段
-	systemPromptField := currentAgentValue.FieldByName("systemPrompt")
+	systemPromptField := sessionAgentValue.FieldByName("systemPrompt")
 	if !systemPromptField.IsValid() {
 		return "", fmt.Errorf("systemPrompt field not found in sessionAgent struct. " +
 			"This may indicate that the internal implementation has changed")
