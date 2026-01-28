@@ -51,3 +51,7 @@ manpages/
 completions/
 !internal/tui/components/completions/
 .prettierignore
+zorkagent
+
+# Backup files
+*.bak

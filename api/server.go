@@ -8,8 +8,8 @@ import (
 
 	"github.com/charmbracelet/crush/api/handlers"
 	"github.com/charmbracelet/crush/api/middleware"
-	hertzserver "github.com/cloudwego/hertz/pkg/app/server"
 	hertzapp "github.com/cloudwego/hertz/pkg/app"
+	hertzserver "github.com/cloudwego/hertz/pkg/app/server"
 	"github.com/cloudwego/hertz/pkg/protocol/consts"
 )
 
@@ -45,10 +45,12 @@ func NewServer(host string, port int) *Server {
 // Start 启动 Hertz 服务器并注册路由
 func (s *Server) Start() error {
 	// 全局中间件
+	// 注意：中间件按顺序执行，Recovery 放最前确保捕获所有 panic
 	s.Use(
-		middleware.LoggingMiddleware(),
-		middleware.CORSMiddleware(),
-		middleware.JSONMiddleware(),
+		middleware.RecoveryMiddleware(), // panic 恢复
+		middleware.LoggingMiddleware(),  // 日志记录
+		middleware.CORSMiddleware(),     // CORS 处理
+		middleware.JSONMiddleware(),     // JSON Content-Type
 	)
 
 	// Swagger 路由
@@ -56,7 +58,7 @@ func (s *Server) Start() error {
 	s.GET("/swagger", handlers.HandleSwaggerUI)
 	s.GET("/swagger/doc.json", handlers.HandleSwaggerJSON)
 	s.GET("/swagger/openapi3.json", handlers.HandleOpenAPI3JSON) // OpenAPI 3.0
-	s.GET("/redoc", handlers.HandleRedoc) // Redoc UI with OpenAPI 3.0
+	s.GET("/redoc", handlers.HandleRedoc)                        // Redoc UI with OpenAPI 3.0
 
 	// API 路由
 	{
@@ -96,8 +98,8 @@ func (s *Server) Start() error {
 		s.GET("/file/status", s.handlers.HandleGetGitStatus)    // 获取 Git 状态
 
 		// LSP 和 MCP 状态
-		s.GET("/lsp", s.handlers.HandleGetLSPStatus)            // 获取 LSP 状态
-		s.GET("/mcp", s.handlers.HandleGetMCPStatus)            // 获取 MCP 状态
+		s.GET("/lsp", s.handlers.HandleGetLSPStatus) // 获取 LSP 状态
+		s.GET("/mcp", s.handlers.HandleGetMCPStatus) // 获取 MCP 状态
 
 		// 会话管理 - 使用查询参数指定项目
 		s.GET("/session", s.handlers.HandleListSessions)

@@ -9,18 +9,21 @@ import (
 )
 
 // HandleAbortSession 中止会话的 AI 处理 (参考 OpenCode: /session/{sessionID}/abort)
+// 注意：当前实现会取消所有会话的 AI 处理，而非单个会话
+// 这是由于 internal 层的 AgentCoordinator 只提供 CancelAll() 方法
+// 后续可以扩展 internal 层以支持单会话取消
 //
 //	@Summary		中止会话
-//	@Description	中止指定会话的 AI 处理
+//	@Description	中止指定会话的 AI 处理。注意：当前实现会取消该项目下所有会话的 AI 处理。
 //	@Tags			Session
 //	@Accept			json
 //	@Produce		json
 //	@Param			directory	query		string	true	"项目路径"
-//	@Param			session_id	path		string	true	"会话ID"
+//	@Param			id			path		string	true	"会话ID"
 //	@Success		200			{object}	map[string]string
 //	@Failure		400			{object}	map[string]interface{}
 //	@Failure		404			{object}	map[string]interface{}
-//	@Router			/session/{session_id}/abort [post]
+//	@Router			/session/{id}/abort [post]
 func (h *Handlers) HandleAbortSession(c context.Context, ctx *hertzapp.RequestContext) {
 	projectPath := string(ctx.Query("directory"))
 	if projectPath == "" {
@@ -28,7 +31,7 @@ func (h *Handlers) HandleAbortSession(c context.Context, ctx *hertzapp.RequestCo
 		return
 	}
 
-	sessionID := ctx.Param("session_id")
+	sessionID := ctx.Param("id")
 	if sessionID == "" {
 		WriteError(c, ctx, "INVALID_REQUEST", "Session ID is required", consts.StatusBadRequest)
 		return
@@ -54,7 +57,7 @@ func (h *Handlers) HandleAbortSession(c context.Context, ctx *hertzapp.RequestCo
 
 	// 中止所有正在进行的 agent 处理
 	// 注意：当前 internal 层的 AgentCoordinator.CancelAll() 会取消所有会话
-	// 如果需要只取消特定会话，可能需要扩展 internal 层
+	// TODO: 扩展 internal 层以支持单会话取消 appInstance.AgentCoordinator.Cancel(sessionID)
 	if appInstance.AgentCoordinator != nil {
 		appInstance.AgentCoordinator.CancelAll()
 	}
@@ -62,6 +65,7 @@ func (h *Handlers) HandleAbortSession(c context.Context, ctx *hertzapp.RequestCo
 	WriteJSON(c, ctx, consts.StatusOK, map[string]string{
 		"status":     "aborted",
 		"session_id": sessionID,
+		"note":       "All AI processing for this project has been cancelled",
 	})
 }
 

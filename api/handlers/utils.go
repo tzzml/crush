@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
-	"net/url"
 	"strconv"
 
 	"github.com/cloudwego/hertz/pkg/app"
@@ -72,32 +71,3 @@ func ParsePaginationParams(ctx *app.RequestContext, defaultLimit, maxLimit int) 
 
 	return limit, offset
 }
-
-// ExtractProjectPath 从 Hertz 请求上下文中提取并解码项目路径
-func ExtractProjectPath(ctx *app.RequestContext) (string, error) {
-	projectPath := ctx.Param("path")
-	projectPath, err := url.PathUnescape(projectPath)
-	if err != nil {
-		return "", err
-	}
-
-	if projectPath == "" {
-		return "", ErrInvalidPath
-	}
-
-	return projectPath, nil
-}
-
-// ErrInvalidPath 表示项目路径无效的错误
-var ErrInvalidPath = &PathError{"invalid project path"}
-
-// PathError 表示路径相关错误
-type PathError struct {
-	Msg string
-}
-
-func (e *PathError) Error() string {
-	return e.Msg
-}
-
-

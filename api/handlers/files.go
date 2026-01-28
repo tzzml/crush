@@ -15,6 +15,37 @@ import (
 	"github.com/cloudwego/hertz/pkg/protocol/consts"
 )
 
+// 搜索相关常量
+const (
+	maxSearchQueryLength   = 1000 // 搜索查询最大长度
+	maxSearchPatternLength = 500  // 文件名模式最大长度
+	maxPathLength          = 4096 // 路径最大长度
+)
+
+// validateSearchInput 验证搜索输入
+func validateSearchInput(query string) error {
+	if len(query) > maxSearchQueryLength {
+		return fmt.Errorf("query too long, maximum %d characters allowed", maxSearchQueryLength)
+	}
+	return nil
+}
+
+// validatePath 验证路径是否安全
+func validatePath(path string) error {
+	if path == "" {
+		return fmt.Errorf("path cannot be empty")
+	}
+	if len(path) > maxPathLength {
+		return fmt.Errorf("path too long, maximum %d characters allowed", maxPathLength)
+	}
+	// 防止路径遍历攻击
+	cleanPath := filepath.Clean(path)
+	if strings.Contains(cleanPath, "..") {
+		return fmt.Errorf("path traversal not allowed")
+	}
+	return nil
+}
+
 // HandleSearchContent 处理搜索文本内容的请求 (参考 OpenCode: /find)
 //
 //	@Summary		搜索文本内容
@@ -37,9 +68,21 @@ func (h *Handlers) HandleSearchContent(c context.Context, ctx *hertzapp.RequestC
 		return
 	}
 
+	// 验证目录路径
+	if err := validatePath(directory); err != nil {
+		WriteError(c, ctx, "INVALID_DIRECTORY", err.Error(), consts.StatusBadRequest)
+		return
+	}
+
 	query := string(ctx.Query("query"))
 	if query == "" {
 		WriteError(c, ctx, "MISSING_QUERY", "Query parameter is required", consts.StatusBadRequest)
+		return
+	}
+
+	// 验证搜索查询
+	if err := validateSearchInput(query); err != nil {
+		WriteError(c, ctx, "INVALID_QUERY", err.Error(), consts.StatusBadRequest)
 		return
 	}
 
