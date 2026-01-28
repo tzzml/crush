@@ -1,5 +1,9 @@
 package models
 
+import (
+	"encoding/json"
+)
+
 // Opencode-compatible types for the /prompt endpoint
 
 // PromptRequest represents the request body for the /prompt endpoint
@@ -9,6 +13,90 @@ type PromptRequest struct {
 	Agent     string      `json:"agent,omitempty"`
 	NoReply   bool        `json:"noReply,omitempty"`
 	Parts     []PartInput `json:"parts"`
+}
+
+// UnmarshalJSON implements custom JSON unmarshaling for PromptRequest
+func (r *PromptRequest) UnmarshalJSON(data []byte) error {
+	// Define an alias type to avoid infinite recursion
+	type Alias PromptRequest
+
+	tmp := struct {
+		Parts []json.RawMessage `json:"parts"`
+		*Alias
+	}{
+		Alias: (*Alias)(r),
+	}
+
+	if err := json.Unmarshal(data, &tmp); err != nil {
+		return err
+	}
+
+	// Parse each part
+	r.Parts = make([]PartInput, len(tmp.Parts))
+	for i, partData := range tmp.Parts {
+		part, err := unmarshalPartInput(partData)
+		if err != nil {
+			return err
+		}
+		r.Parts[i] = part
+	}
+
+	return nil
+}
+
+// unmarshalPartInput attempts to unmarshal a part to its specific type
+func unmarshalPartInput(data []byte) (PartInput, error) {
+	// Try to determine the type by checking for known fields
+	var checkMap map[string]any
+	if err := json.Unmarshal(data, &checkMap); err != nil {
+		return nil, err
+	}
+
+	// Check for type-specific fields
+	if _, hasText := checkMap["text"]; hasText {
+		var part TextPartInput
+		if err := json.Unmarshal(data, &part); err != nil {
+			return nil, err
+		}
+		return part, nil
+	}
+
+	if _, hasName := checkMap["name"]; hasName {
+		if _, hasData := checkMap["data"]; hasData {
+			var part FilePartInput
+			if err := json.Unmarshal(data, &part); err != nil {
+				return nil, err
+			}
+			return part, nil
+		}
+	}
+
+	if _, hasPrompt := checkMap["prompt"]; hasPrompt {
+		if _, hasAgent := checkMap["agent"]; hasAgent {
+			if _, hasDescriptor := checkMap["descriptor"]; hasDescriptor {
+				// SubtaskPartInput has both agent and descriptor
+				var part SubtaskPartInput
+				if err := json.Unmarshal(data, &part); err != nil {
+					return nil, err
+				}
+				return part, nil
+			} else {
+				// AgentPartInput has agent but no descriptor
+				var part AgentPartInput
+				if err := json.Unmarshal(data, &part); err != nil {
+					return nil, err
+				}
+				return part, nil
+			}
+		}
+	}
+
+	// Default to TextPartInput if we can't determine the type
+	var part TextPartInput
+	if err := json.Unmarshal(data, &part); err != nil {
+		return nil, err
+	}
+	return part, nil
 }
 
 // ModelSpec specifies the AI model to use
