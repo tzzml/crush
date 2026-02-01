@@ -34,6 +34,8 @@ import (
 // @host      localhost:8080
 // @BasePath  /
 
+// @schemes http https
+
 // multiHandler 实现 slog.Handler 接口，同时将日志写入多个 handler
 type multiHandler struct {
 	handlers []slog.Handler

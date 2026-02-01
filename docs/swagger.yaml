@@ -1,4 +1,38 @@
+basePath: /
 definitions:
+  models.AssistantMessage:
+    properties:
+      agent:
+        type: string
+      cost:
+        type: number
+      finish:
+        type: string
+      id:
+        type: string
+      modelID:
+        type: string
+      parentID:
+        type: string
+      providerID:
+        type: string
+      role:
+        description: '"assistant"'
+        type: string
+      sessionID:
+        type: string
+      time:
+        $ref: '#/definitions/models.MessageTime'
+      tokens:
+        $ref: '#/definitions/models.TokenInfo'
+    type: object
+  models.CacheTokenInfo:
+    properties:
+      read:
+        type: integer
+      write:
+        type: integer
+    type: object
   models.ConfigResponse:
     properties:
       configured:
@@ -13,20 +47,6 @@ definitions:
         type: array
       working_dir:
         type: string
-    type: object
-  models.CreateMessageRequest:
-    properties:
-      prompt:
-        type: string
-      stream:
-        type: boolean
-    type: object
-  models.CreateMessageResponse:
-    properties:
-      message:
-        $ref: '#/definitions/models.MessageResponse'
-      session:
-        $ref: '#/definitions/models.SessionResponse'
     type: object
   models.CreateProjectRequest:
     properties:
@@ -125,6 +145,18 @@ definitions:
       path:
         type: string
     type: object
+  models.GetSystemPromptResponse:
+    properties:
+      is_custom:
+        description: IsCustom 是否为自定义提示词（非空表示已自定义）
+        type: boolean
+      length:
+        description: Length 系统提示词的字符数
+        type: integer
+      system_prompt:
+        description: SystemPrompt 当前的系统提示词内容
+        type: string
+    type: object
   models.GitFileStatus:
     properties:
       old_path:
@@ -211,6 +243,13 @@ definitions:
       updated_at:
         type: integer
     type: object
+  models.MessageTime:
+    properties:
+      completed:
+        type: integer
+      created:
+        type: integer
+    type: object
   models.MessagesResponse:
     properties:
       messages:
@@ -219,6 +258,13 @@ definitions:
         type: array
       total:
         type: integer
+    type: object
+  models.ModelSpec:
+    properties:
+      modelID:
+        type: string
+      providerID:
+        type: string
     type: object
   models.PermissionReplyRequest:
     properties:
@@ -268,6 +314,28 @@ definitions:
       projects:
         items:
           $ref: '#/definitions/models.ProjectResponse'
+        type: array
+    type: object
+  models.PromptRequest:
+    properties:
+      agent:
+        type: string
+      messageID:
+        type: string
+      model:
+        $ref: '#/definitions/models.ModelSpec'
+      noReply:
+        type: boolean
+      parts:
+        items: {}
+        type: array
+    type: object
+  models.PromptResponse:
+    properties:
+      info:
+        $ref: '#/definitions/models.AssistantMessage'
+      parts:
+        items: {}
         type: array
     type: object
   models.ProviderInfo:
@@ -353,6 +421,17 @@ definitions:
       status:
         type: string
     type: object
+  models.TokenInfo:
+    properties:
+      cache:
+        $ref: '#/definitions/models.CacheTokenInfo'
+      input:
+        type: integer
+      output:
+        type: integer
+      reasoning:
+        type: integer
+    type: object
   models.UpdateSessionRequest:
     properties:
       title:
@@ -363,8 +442,39 @@ definitions:
       session:
         $ref: '#/definitions/models.SessionResponse'
     type: object
+  models.UpdateSystemPromptRequest:
+    properties:
+      system_prompt:
+        description: SystemPrompt 新的系统提示词内容
+        type: string
+    required:
+    - system_prompt
+    type: object
+  models.UpdateSystemPromptResponse:
+    properties:
+      message:
+        description: Message 操作结果消息（可选）
+        type: string
+      success:
+        description: Success 是否成功更新
+        type: boolean
+      system_prompt:
+        description: SystemPrompt 更新后的系统提示词内容
+        type: string
+    type: object
+host: localhost:8080
 info:
-  contact: {}
+  contact:
+    email: support@swagger.io
+    name: API Support
+    url: http://www.swagger.io/support
+  description: AI 项目管理 API 服务
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  termsOfService: http://swagger.io/terms/
+  title: Zork Agent API
+  version: "1.0"
 paths:
   /event:
     get:
@@ -394,7 +504,7 @@ paths:
           schema:
             additionalProperties: true
             type: object
-      summary: 服务器发送事件
+      summary: 订阅服务器事件
       tags:
       - Event
   /file:
@@ -1006,7 +1116,7 @@ paths:
       parameters:
       - description: 项目路径
         in: query
-        name: project
+        name: directory
         required: true
         type: string
       - description: 创建会话请求
@@ -1115,7 +1225,7 @@ paths:
       parameters:
       - description: 项目路径
         in: query
-        name: project
+        name: directory
         required: true
         type: string
       - description: 会话ID
@@ -1223,34 +1333,36 @@ paths:
       summary: 获取消息列表
       tags:
       - Message
+  /session/{sessionID}/prompt:
     post:
       consumes:
       - application/json
-      description: 在指定会话中创建新消息，支持同步和流式响应
+      description: Create and send a new message to a session using Opencode SDK compatible
+        API
       parameters:
-      - description: 项目路径
+      - description: Project path
         in: query
-        name: project
+        name: directory
         required: true
         type: string
-      - description: 会话ID
+      - description: Session ID
         in: path
-        name: session_id
+        name: sessionID
         required: true
         type: string
-      - description: 创建消息请求
+      - description: Prompt request
         in: body
         name: request
         required: true
         schema:
-          $ref: '#/definitions/models.CreateMessageRequest'
+          $ref: '#/definitions/models.PromptRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/models.CreateMessageResponse'
+            $ref: '#/definitions/models.PromptResponse'
         "400":
           description: Bad Request
           schema:
@@ -1261,9 +1373,9 @@ paths:
           schema:
             additionalProperties: true
             type: object
-      summary: 创建消息
+      summary: Send message (Opencode compatible)
       tags:
-      - Message
+      - Session
   /session/status:
     get:
       consumes:
@@ -1296,4 +1408,84 @@ paths:
       summary: 获取会话状态
       tags:
       - Session
+  /system-prompt:
+    get:
+      consumes:
+      - application/json
+      description: 获取指定项目当前的系统提示词内容
+      parameters:
+      - description: 项目路径
+        in: query
+        name: directory
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.GetSystemPromptResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 获取系统提示词
+      tags:
+      - Prompt
+    put:
+      consumes:
+      - application/json
+      description: 动态修改指定项目的系统提示词，无需重启服务。更新后立即对后续对话生效。
+      parameters:
+      - description: 项目路径
+        in: query
+        name: directory
+        required: true
+        type: string
+      - description: 系统提示词
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.UpdateSystemPromptRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.UpdateSystemPromptResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 更新系统提示词
+      tags:
+      - Prompt
+schemes:
+- http
+- https
 swagger: "2.0"

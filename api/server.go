@@ -8,8 +8,8 @@ import (
 
 	"github.com/charmbracelet/crush/api/handlers"
 	"github.com/charmbracelet/crush/api/middleware"
-	hertzserver "github.com/cloudwego/hertz/pkg/app/server"
 	hertzapp "github.com/cloudwego/hertz/pkg/app"
+	hertzserver "github.com/cloudwego/hertz/pkg/app/server"
 	"github.com/cloudwego/hertz/pkg/protocol/consts"
 )
 
@@ -45,16 +45,20 @@ func NewServer(host string, port int) *Server {
 // Start 启动 Hertz 服务器并注册路由
 func (s *Server) Start() error {
 	// 全局中间件
+	// 注意：中间件按顺序执行，Recovery 放最前确保捕获所有 panic
 	s.Use(
-		middleware.LoggingMiddleware(),
-		middleware.CORSMiddleware(),
-		middleware.JSONMiddleware(),
+		middleware.RecoveryMiddleware(), // panic 恢复
+		middleware.LoggingMiddleware(),  // 日志记录
+		middleware.CORSMiddleware(),     // CORS 处理
+		middleware.JSONMiddleware(),     // JSON Content-Type
 	)
 
 	// Swagger 路由
 	s.GET("/", handlers.HandleIndexRedirect)
 	s.GET("/swagger", handlers.HandleSwaggerUI)
 	s.GET("/swagger/doc.json", handlers.HandleSwaggerJSON)
+	s.GET("/swagger/openapi3.json", handlers.HandleOpenAPI3JSON) // OpenAPI 3.0
+	s.GET("/redoc", handlers.HandleRedoc)                        // Redoc UI with OpenAPI 3.0
 
 	// API 路由
 	{
@@ -69,6 +73,11 @@ func (s *Server) Start() error {
 		// 实例生命周期 - 释放单个项目实例
 		s.POST("/instance/dispose", s.handlers.HandleDisposeProject)
 		s.GET("/project/config", s.handlers.HandleGetConfig)
+
+		// 系统提示词管理
+		s.GET("/system-prompt", s.handlers.HandleGetSystemPrompt)
+		s.PUT("/system-prompt", s.handlers.HandleUpdateSystemPrompt)
+
 		s.GET("/project/permissions", s.handlers.HandleListPermissions)
 		s.POST("/project/permissions/:requestID/reply", s.handlers.HandleReplyPermission)
 
@@ -89,8 +98,8 @@ func (s *Server) Start() error {
 		s.GET("/file/status", s.handlers.HandleGetGitStatus)    // 获取 Git 状态
 
 		// LSP 和 MCP 状态
-		s.GET("/lsp", s.handlers.HandleGetLSPStatus)            // 获取 LSP 状态
-		s.GET("/mcp", s.handlers.HandleGetMCPStatus)            // 获取 MCP 状态
+		s.GET("/lsp", s.handlers.HandleGetLSPStatus) // 获取 LSP 状态
+		s.GET("/mcp", s.handlers.HandleGetMCPStatus) // 获取 MCP 状态
 
 		// 会话管理 - 使用查询参数指定项目
 		s.GET("/session", s.handlers.HandleListSessions)
@@ -102,8 +111,8 @@ func (s *Server) Start() error {
 		s.GET("/session/status", s.handlers.HandleGetSessionStatus)
 
 		// 消息管理 - 使用查询参数指定项目
-		s.GET("/session/:session_id/message", s.handlers.HandleListMessages)
-		s.POST("/session/:session_id/message", s.handlers.HandleCreateMessage)
+		s.GET("/session/:sessionID/message", s.handlers.HandleListMessages)
+		s.POST("/session/:sessionID/prompt", s.handlers.HandlePrompt)
 		s.GET("/message/:id", s.handlers.HandleGetMessage)
 
 		// SSE 事件流 - 需要单独处理，跳过 JSON 中间件

@@ -55,10 +55,12 @@ func (am *AppManager) createAppInstance(ctx context.Context, projectPath string)
 	}
 
 	// 连接数据库
+	slog.Info("Creating database connection", "project", projectPath, "data_dir", project.DataDir)
 	conn, err := db.Connect(ctx, project.DataDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
+	slog.Info("Database connection established", "project", projectPath)
 
 	// 创建 app 实例
 	appInstance, err := internalapp.New(ctx, conn, cfg)

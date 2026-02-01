@@ -65,36 +65,36 @@ func (h *Handlers) HandleListMessages(c context.Context, ctx *hertzapp.RequestCo
 	WriteJSON(c, ctx, consts.StatusOK, response)
 }
 
-// HandleCreateMessage 处理发送消息的请求（支持同步和流式）
+// HandlePrompt 处理发送消息的请求（Opencode SDK 兼容）
 //
-//	@Summary		创建消息
-//	@Description	在指定会话中创建新消息，支持同步和流式响应
-//	@Tags			Message
+//	@Summary		Send message (Opencode compatible)
+//	@Description	Create and send a new message to a session using Opencode SDK compatible API
+//	@Tags			Session
 //	@Accept			json
 //	@Produce		json
-//	@Param			project		query		string						true	"项目路径"
-//	@Param			session_id	path		string						true	"会话ID"
-//	@Param			request		body		models.CreateMessageRequest	true	"创建消息请求"
-//	@Success		200			{object}	models.CreateMessageResponse
+//	@Param			directory	query		string					true	"Project path"
+//	@Param			sessionID	path		string					true	"Session ID"
+//	@Param			request		body		models.PromptRequest	true	"Prompt request"
+//	@Success		200			{object}	models.PromptResponse
 //	@Failure		400			{object}	map[string]interface{}
 //	@Failure		404			{object}	map[string]interface{}
-//	@Router			/session/{session_id}/message [post]
-func (h *Handlers) HandleCreateMessage(c context.Context, ctx *hertzapp.RequestContext) {
+//	@Router			/session/{sessionID}/prompt [post]
+func (h *Handlers) HandlePrompt(c context.Context, ctx *hertzapp.RequestContext) {
 	projectPath := string(ctx.Query("directory"))
 	if projectPath == "" {
 		WriteError(c, ctx, "MISSING_DIRECTORY_PARAM", "Directory query parameter is required", consts.StatusBadRequest)
 		return
 	}
-	sessionID := ctx.Param("session_id")
+	sessionID := ctx.Param("sessionID")
 
-	var req models.CreateMessageRequest
+	var req models.PromptRequest
 	if err := ctx.BindJSON(&req); err != nil {
 		WriteError(c, ctx, "INVALID_REQUEST", "Invalid request body: "+err.Error(), consts.StatusBadRequest)
 		return
 	}
 
-	if req.Prompt == "" {
-		WriteError(c, ctx, "INVALID_REQUEST", "Prompt is required", consts.StatusBadRequest)
+	if len(req.Parts) == 0 {
+		WriteError(c, ctx, "INVALID_REQUEST", "Parts array is required", consts.StatusBadRequest)
 		return
 	}
 
@@ -112,31 +112,51 @@ func (h *Handlers) HandleCreateMessage(c context.Context, ctx *hertzapp.RequestC
 	// 自动批准权限请求
 	appInstance.Permissions.AutoApproveSession(sessionID)
 
-	if req.Stream {
-		// 流式响应
-		h.handleStreamMessage(c, ctx, sessionID, req.Prompt, appInstance)
+	// 从 Parts 中提取 prompt 文本
+	promptText := models.ExtractPromptTextFromParts(req.Parts)
+
+	if req.NoReply {
+		// NoReply 模式 - 仅创建用户消息，不运行 AI
+		h.handleNoReplyPrompt(c, ctx, sessionID, req, appInstance)
 	} else {
-		// 同步响应
-		h.handleSyncMessage(c, ctx, sessionID, req.Prompt, appInstance)
+		// 运行 AI 并获取响应
+		h.handleSyncPrompt(c, ctx, sessionID, promptText, appInstance)
 	}
 }
 
-// handleSyncMessage 处理同步消息响应
-func (h *Handlers) handleSyncMessage(c context.Context, ctx *hertzapp.RequestContext, sessionID, prompt string, appInstance *internalapp.App) {
-	// 创建用户消息
-	_, err := appInstance.Messages.Create(c, sessionID, message.CreateMessageParams{
-		Role:             message.User,
-		Parts:            []message.ContentPart{message.TextContent{Text: prompt}},
-		Model:            "",
-		Provider:         "",
-		IsSummaryMessage: false,
-	})
+// 消息处理相关常量
+const (
+	promptTimeout    = 5 * time.Minute        // AI 推理超时时间
+	messageWaitDelay = 500 * time.Millisecond // 等待最后消息更新的延迟
+	finishWaitDelay  = 200 * time.Millisecond // 消息完成后的等待延迟
+)
+
+// handleSyncPrompt 处理同步消息响应（Opencode 兼容）
+func (h *Handlers) handleSyncPrompt(c context.Context, ctx *hertzapp.RequestContext, sessionID, prompt string, appInstance *internalapp.App) {
+	assistantMsg, err := h.waitForAIResponse(c, sessionID, prompt, appInstance)
 	if err != nil {
-		WriteError(c, ctx, "INTERNAL_ERROR", "Failed to create user message: "+err.Error(), consts.StatusInternalServerError)
+		switch err.Error() {
+		case "request_cancelled":
+			WriteError(c, ctx, "REQUEST_CANCELLED", "Request cancelled", consts.StatusRequestTimeout)
+		case "timeout":
+			WriteError(c, ctx, "TIMEOUT", "Request timeout", consts.StatusRequestTimeout)
+		default:
+			WriteError(c, ctx, "INTERNAL_ERROR", "Failed to run agent: "+err.Error(), consts.StatusInternalServerError)
+		}
 		return
 	}
 
-	// 运行 AI
+	// 使用 Opencode 兼容的响应格式
+	response := models.MessageToPromptResponse(assistantMsg)
+	WriteJSON(c, ctx, consts.StatusOK, response)
+}
+
+// waitForAIResponse 等待 AI 响应完成
+// 返回 assistant 消息和错误（如果有）
+func (h *Handlers) waitForAIResponse(c context.Context, sessionID, prompt string, appInstance *internalapp.App) (message.Message, error) {
+	var assistantMsg message.Message
+
+	// 运行 AI（AgentCoordinator 内部会创建用户消息）
 	done := make(chan struct {
 		result interface{}
 		err    error
@@ -164,48 +184,62 @@ func (h *Handlers) handleSyncMessage(c context.Context, ctx *hertzapp.RequestCon
 
 	// 订阅消息事件
 	messageEvents := appInstance.Messages.Subscribe(c)
-	var assistantMsg message.Message
-
-	timeout := time.After(5 * time.Minute) // 5分钟超时
+	timeout := time.After(promptTimeout)
 
 	for {
 		select {
 		case <-c.Done():
-			WriteError(c, ctx, "REQUEST_CANCELLED", "Request cancelled", consts.StatusRequestTimeout)
-			return
+			return assistantMsg, fmt.Errorf("request_cancelled")
+
 		case <-timeout:
-			WriteError(c, ctx, "TIMEOUT", "Request timeout", consts.StatusRequestTimeout)
-			return
+			return assistantMsg, fmt.Errorf("timeout")
+
 		case result := <-done:
 			if result.err != nil {
-				WriteError(c, ctx, "INTERNAL_ERROR", "Failed to run agent: "+result.err.Error(), consts.StatusInternalServerError)
-				return
+				return assistantMsg, result.err
 			}
 			// 等待最后的消息更新
-			time.Sleep(500 * time.Millisecond)
-			goto done
+			time.Sleep(messageWaitDelay)
+			return assistantMsg, nil
+
 		case event := <-messageEvents:
 			msg := event.Payload
 			if msg.SessionID == sessionID && msg.Role == message.Assistant {
 				assistantMsg = msg
 				// 检查消息是否完成
 				if msg.FinishPart() != nil {
-					// 消息已完成
-					time.Sleep(200 * time.Millisecond) // 等待可能的最后更新
-					goto done
+					// 消息已完成，等待可能的最后更新
+					time.Sleep(finishWaitDelay)
+					return assistantMsg, nil
 				}
 			}
 		}
 	}
+}
 
-done:
-	// 获取更新后的会话信息
-	updatedSession, _ := appInstance.Sessions.Get(c, sessionID)
-
-	response := models.CreateMessageResponse{
-		Message: models.MessageToResponse(assistantMsg),
-		Session: models.SessionToResponse(updatedSession),
+// handleNoReplyPrompt 处理 NoReply 模式的消息（仅创建用户消息）
+func (h *Handlers) handleNoReplyPrompt(c context.Context, ctx *hertzapp.RequestContext, sessionID string, req models.PromptRequest, appInstance *internalapp.App) {
+	// 创建用户消息参数
+	params := message.CreateMessageParams{
+		Role:  message.User,
+		Parts: models.PartsToMessageParts(sessionID, req.Parts),
 	}
+
+	// 如果请求中指定了模型，使用它
+	if req.Model != nil {
+		params.Provider = req.Model.ProviderID
+		params.Model = req.Model.ModelID
+	}
+
+	// 保存消息
+	createdMsg, err := appInstance.Messages.Create(c, sessionID, params)
+	if err != nil {
+		WriteError(c, ctx, "INTERNAL_ERROR", "Failed to create message: "+err.Error(), consts.StatusInternalServerError)
+		return
+	}
+
+	// 返回创建的消息（使用 Opencode 格式）
+	response := models.MessageToPromptResponse(createdMsg)
 
 	WriteJSON(c, ctx, consts.StatusOK, response)
 }
@@ -218,27 +252,13 @@ func (h *Handlers) handleStreamMessage(c context.Context, ctx *hertzapp.RequestC
 	ctx.Response.Header.Set("Connection", "keep-alive")
 	ctx.Response.Header.Set("X-Accel-Buffering", "no") // 禁用 nginx 缓冲
 
-	// 创建用户消息
-	userMsg, err := appInstance.Messages.Create(c, sessionID, message.CreateMessageParams{
-		Role:             message.User,
-		Parts:            []message.ContentPart{message.TextContent{Text: prompt}},
-		Model:            "",
-		Provider:         "",
-		IsSummaryMessage: false,
-	})
-	if err != nil {
-		writeSSEError(ctx, "Failed to create user message: "+err.Error())
-		return
-	}
-
-	// 发送开始事件
+	// 发送开始事件（用户消息 ID 暂时为空，等 AgentCoordinator 创建后会通过事件更新）
 	writeSSE(ctx, models.SSEEvent{
-		Type:      "start",
-		MessageID: userMsg.ID,
+		Type: "start",
 	})
 	ctx.Flush()
 
-	// 运行 AI
+	// 运行 AI（AgentCoordinator 内部会创建用户消息）
 	done := make(chan struct {
 		result interface{}
 		err    error
@@ -264,25 +284,27 @@ func (h *Handlers) handleStreamMessage(c context.Context, ctx *hertzapp.RequestC
 	messageEvents := appInstance.Messages.Subscribe(c)
 	messageReadBytes := make(map[string]int)
 	var assistantMsg message.Message
+	var streamErr error
 
-	timeout := time.After(5 * time.Minute)
+	timeout := time.After(promptTimeout)
 
+eventLoop:
 	for {
 		select {
 		case <-c.Done():
-			writeSSEError(ctx, "Request cancelled")
-			return
+			streamErr = fmt.Errorf("request cancelled")
+			break eventLoop
 		case <-timeout:
-			writeSSEError(ctx, "Request timeout")
-			return
+			streamErr = fmt.Errorf("request timeout")
+			break eventLoop
 		case result := <-done:
 			if result.err != nil {
-				writeSSEError(ctx, "Failed to run agent: "+result.err.Error())
-				return
+				streamErr = result.err
+				break eventLoop
 			}
 			// 等待最后的消息更新
-			time.Sleep(500 * time.Millisecond)
-			goto streamDone
+			time.Sleep(messageWaitDelay)
+			break eventLoop
 		case event := <-messageEvents:
 			msg := event.Payload
 			if msg.SessionID == sessionID && msg.Role == message.Assistant {
@@ -304,14 +326,19 @@ func (h *Handlers) handleStreamMessage(c context.Context, ctx *hertzapp.RequestC
 
 				// 检查消息是否完成
 				if msg.FinishPart() != nil {
-					time.Sleep(200 * time.Millisecond)
-					goto streamDone
+					time.Sleep(finishWaitDelay)
+					break eventLoop
 				}
 			}
 		}
 	}
 
-streamDone:
+	// 处理错误
+	if streamErr != nil {
+		writeSSEError(ctx, streamErr.Error())
+		return
+	}
+
 	// 获取更新后的会话信息
 	updatedSession, _ := appInstance.Sessions.Get(c, sessionID)
 

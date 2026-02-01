@@ -9,7 +9,16 @@ const docTemplate = `{
     "info": {
         "description": "{{escape .Description}}",
         "title": "{{.Title}}",
-        "contact": {},
+        "termsOfService": "http://swagger.io/terms/",
+        "contact": {
+            "name": "API Support",
+            "url": "http://www.swagger.io/support",
+            "email": "support@swagger.io"
+        },
+        "license": {
+            "name": "Apache 2.0",
+            "url": "http://www.apache.org/licenses/LICENSE-2.0.html"
+        },
         "version": "{{.Version}}"
     },
     "host": "{{.Host}}",
@@ -27,7 +36,7 @@ const docTemplate = `{
                 "tags": [
                     "Event"
                 ],
-                "summary": "服务器发送事件",
+                "summary": "订阅服务器事件",
                 "parameters": [
                     {
                         "type": "string",
@@ -968,7 +977,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "项目路径",
-                        "name": "project",
+                        "name": "directory",
                         "in": "query",
                         "required": true
                     },
@@ -1121,7 +1130,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "项目路径",
-                        "name": "project",
+                        "name": "directory",
                         "in": "query",
                         "required": true
                     },
@@ -1201,6 +1210,68 @@ const docTemplate = `{
                             "additionalProperties": {
                                 "type": "string"
                             }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/session/{sessionID}/prompt": {
+            "post": {
+                "description": "Create and send a new message to a session using Opencode SDK compatible API",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Session"
+                ],
+                "summary": "Send message (Opencode compatible)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project path",
+                        "name": "directory",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Session ID",
+                        "name": "sessionID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Prompt request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.PromptRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.PromptResponse"
                         }
                     },
                     "400": {
@@ -1327,9 +1398,11 @@ const docTemplate = `{
                         }
                     }
                 }
-            },
-            "post": {
-                "description": "在指定会话中创建新消息，支持同步和流式响应",
+            }
+        },
+        "/system-prompt": {
+            "get": {
+                "description": "获取指定项目当前的系统提示词内容",
                 "consumes": [
                     "application/json"
                 ],
@@ -1337,39 +1410,23 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Message"
+                    "Prompt"
                 ],
-                "summary": "创建消息",
+                "summary": "获取系统提示词",
                 "parameters": [
                     {
                         "type": "string",
                         "description": "项目路径",
-                        "name": "project",
+                        "name": "directory",
                         "in": "query",
                         "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "会话ID",
-                        "name": "session_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "创建消息请求",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/models.CreateMessageRequest"
-                        }
                     }
                 ],
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.CreateMessageResponse"
+                            "$ref": "#/definitions/models.GetSystemPromptResponse"
                         }
                     },
                     "400": {
@@ -1385,12 +1442,129 @@ const docTemplate = `{
                             "type": "object",
                             "additionalProperties": true
                         }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "put": {
+                "description": "动态修改指定项目的系统提示词，无需重启服务。更新后立即对后续对话生效。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Prompt"
+                ],
+                "summary": "更新系统提示词",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "项目路径",
+                        "name": "directory",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "description": "系统提示词",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.UpdateSystemPromptRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.UpdateSystemPromptResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
                     }
                 }
             }
         }
     },
     "definitions": {
+        "models.AssistantMessage": {
+            "type": "object",
+            "properties": {
+                "agent": {
+                    "type": "string"
+                },
+                "cost": {
+                    "type": "number"
+                },
+                "finish": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "modelID": {
+                    "type": "string"
+                },
+                "parentID": {
+                    "type": "string"
+                },
+                "providerID": {
+                    "type": "string"
+                },
+                "role": {
+                    "description": "\"assistant\"",
+                    "type": "string"
+                },
+                "sessionID": {
+                    "type": "string"
+                },
+                "time": {
+                    "$ref": "#/definitions/models.MessageTime"
+                },
+                "tokens": {
+                    "$ref": "#/definitions/models.TokenInfo"
+                }
+            }
+        },
+        "models.CacheTokenInfo": {
+            "type": "object",
+            "properties": {
+                "read": {
+                    "type": "integer"
+                },
+                "write": {
+                    "type": "integer"
+                }
+            }
+        },
         "models.ConfigResponse": {
             "type": "object",
             "properties": {
@@ -1411,28 +1585,6 @@ const docTemplate = `{
                 },
                 "working_dir": {
                     "type": "string"
-                }
-            }
-        },
-        "models.CreateMessageRequest": {
-            "type": "object",
-            "properties": {
-                "prompt": {
-                    "type": "string"
-                },
-                "stream": {
-                    "type": "boolean"
-                }
-            }
-        },
-        "models.CreateMessageResponse": {
-            "type": "object",
-            "properties": {
-                "message": {
-                    "$ref": "#/definitions/models.MessageResponse"
-                },
-                "session": {
-                    "$ref": "#/definitions/models.SessionResponse"
                 }
             }
         },
@@ -1585,6 +1737,23 @@ const docTemplate = `{
                 }
             }
         },
+        "models.GetSystemPromptResponse": {
+            "type": "object",
+            "properties": {
+                "is_custom": {
+                    "description": "IsCustom 是否为自定义提示词（非空表示已自定义）",
+                    "type": "boolean"
+                },
+                "length": {
+                    "description": "Length 系统提示词的字符数",
+                    "type": "integer"
+                },
+                "system_prompt": {
+                    "description": "SystemPrompt 当前的系统提示词内容",
+                    "type": "string"
+                }
+            }
+        },
         "models.GitFileStatus": {
             "type": "object",
             "properties": {
@@ -1714,6 +1883,17 @@ const docTemplate = `{
                 }
             }
         },
+        "models.MessageTime": {
+            "type": "object",
+            "properties": {
+                "completed": {
+                    "type": "integer"
+                },
+                "created": {
+                    "type": "integer"
+                }
+            }
+        },
         "models.MessagesResponse": {
             "type": "object",
             "properties": {
@@ -1725,6 +1905,17 @@ const docTemplate = `{
                 },
                 "total": {
                     "type": "integer"
+                }
+            }
+        },
+        "models.ModelSpec": {
+            "type": "object",
+            "properties": {
+                "modelID": {
+                    "type": "string"
+                },
+                "providerID": {
+                    "type": "string"
                 }
             }
         },
@@ -1802,6 +1993,39 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/models.ProjectResponse"
                     }
+                }
+            }
+        },
+        "models.PromptRequest": {
+            "type": "object",
+            "properties": {
+                "agent": {
+                    "type": "string"
+                },
+                "messageID": {
+                    "type": "string"
+                },
+                "model": {
+                    "$ref": "#/definitions/models.ModelSpec"
+                },
+                "noReply": {
+                    "type": "boolean"
+                },
+                "parts": {
+                    "type": "array",
+                    "items": {}
+                }
+            }
+        },
+        "models.PromptResponse": {
+            "type": "object",
+            "properties": {
+                "info": {
+                    "$ref": "#/definitions/models.AssistantMessage"
+                },
+                "parts": {
+                    "type": "array",
+                    "items": {}
                 }
             }
         },
@@ -1933,6 +2157,23 @@ const docTemplate = `{
                 }
             }
         },
+        "models.TokenInfo": {
+            "type": "object",
+            "properties": {
+                "cache": {
+                    "$ref": "#/definitions/models.CacheTokenInfo"
+                },
+                "input": {
+                    "type": "integer"
+                },
+                "output": {
+                    "type": "integer"
+                },
+                "reasoning": {
+                    "type": "integer"
+                }
+            }
+        },
         "models.UpdateSessionRequest": {
             "type": "object",
             "properties": {
@@ -1948,18 +2189,47 @@ const docTemplate = `{
                     "$ref": "#/definitions/models.SessionResponse"
                 }
             }
+        },
+        "models.UpdateSystemPromptRequest": {
+            "type": "object",
+            "required": [
+                "system_prompt"
+            ],
+            "properties": {
+                "system_prompt": {
+                    "description": "SystemPrompt 新的系统提示词内容",
+                    "type": "string"
+                }
+            }
+        },
+        "models.UpdateSystemPromptResponse": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "description": "Message 操作结果消息（可选）",
+                    "type": "string"
+                },
+                "success": {
+                    "description": "Success 是否成功更新",
+                    "type": "boolean"
+                },
+                "system_prompt": {
+                    "description": "SystemPrompt 更新后的系统提示词内容",
+                    "type": "string"
+                }
+            }
         }
     }
 }`
 
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
-	Version:          "",
-	Host:             "",
-	BasePath:         "",
-	Schemes:          []string{},
-	Title:            "",
-	Description:      "",
+	Version:          "1.0",
+	Host:             "localhost:8080",
+	BasePath:         "/",
+	Schemes:          []string{"http", "https"},
+	Title:            "Zork Agent API",
+	Description:      "AI 项目管理 API 服务",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

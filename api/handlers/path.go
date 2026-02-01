@@ -45,20 +45,19 @@ func (h *Handlers) HandleGetPath(c context.Context, ctx *hertzapp.RequestContext
 		return
 	}
 
-	// 构建路径响应
-	response := map[string]interface{}{
-		"home":      os.UserHomeDir, // 用户主目录
-		"state":     filepath.Join(cfg.WorkingDir(), ".crush", "state"), // 状态目录
-		"config":    filepath.Join(cfg.WorkingDir(), ".crush"), // 配置目录
-		"worktree":  cfg.WorkingDir(), // 工作树/项目目录
-		"directory": cfg.WorkingDir(), // 当前目录
+	// 尝试获取 home 目录
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		homeDir = ""
 	}
 
-	// 尝试获取 home 目录
-	if homeDir, err := os.UserHomeDir(); err == nil {
-		response["home"] = homeDir
-	} else {
-		response["home"] = ""
+	// 构建路径响应
+	response := map[string]interface{}{
+		"home":      homeDir,                                            // 用户主目录
+		"state":     filepath.Join(cfg.WorkingDir(), ".crush", "state"), // 状态目录
+		"config":    filepath.Join(cfg.WorkingDir(), ".crush"),          // 配置目录
+		"worktree":  cfg.WorkingDir(),                                   // 工作树/项目目录
+		"directory": cfg.WorkingDir(),                                   // 当前目录
 	}
 
 	WriteJSON(c, ctx, consts.StatusOK, response)
