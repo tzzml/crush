@@ -5,16 +5,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"reflect"
 	"strings"
 	"sync"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/crush/api/models"
-	"github.com/charmbracelet/crush/internal/pubsub"
 	internalapp "github.com/charmbracelet/crush/internal/app"
 	"github.com/charmbracelet/crush/internal/message"
+	"github.com/charmbracelet/crush/internal/pubsub"
 	"github.com/charmbracelet/crush/internal/session"
 	hertzapp "github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/protocol/consts"
@@ -28,7 +27,7 @@ import (
 //	@Accept			json
 //	@Produce		text/event-stream
 //	@Param			directory	query		string	true	"项目路径"
-//	@Success		200		{string}	string	"Event stream"
+//	@Success		200		{object}	models.SSEEvent	"Event stream"
 //	@Failure		400		{object}	map[string]interface{}
 //	@Failure		404		{object}	map[string]interface{}
 //	@Router			/event [get]
@@ -69,7 +68,15 @@ func (h *Handlers) HandleSSE(c context.Context, ctx *hertzapp.RequestContext) {
 	eventCh := h.createEventChannelForProject(c, appInstance)
 
 	// 发送初始连接确认
-	ctx.Response.SetBodyString("event: connected\ndata: {\"status\": \"connected\"}\n\n")
+	// Opencode style: server.connected
+	initEvent := models.SSEEvent{
+		Type: "server.connected",
+		Properties: map[string]string{
+			"status": "connected",
+		},
+	}
+	initData, _ := json.Marshal(initEvent)
+	ctx.Response.SetBodyString(fmt.Sprintf("event: server.connected\ndata: %s\n\n", initData))
 	ctx.Flush()
 
 	// 创建心跳定时器
@@ -102,91 +109,101 @@ func (h *Handlers) HandleSSE(c context.Context, ctx *hertzapp.RequestContext) {
 
 // handleSSEEvent 处理单个SSE事件
 func (h *Handlers) handleSSEEvent(ctx *hertzapp.RequestContext, event tea.Msg) error {
-	var eventType string
-	var eventData interface{}
+	var resp models.SSEEvent
 
 	// 处理不同类型的事件
 	switch e := event.(type) {
 	case pubsub.Event[internalapp.LSPEvent]:
-		eventType = string(e.Type)
-		eventData = e.Payload
-	case pubsub.Event[message.Message]:
-		// 消息事件：转换为 API 响应格式
-		eventType = string(e.Type)
-		eventData = models.MessageToResponse(e.Payload)
-	case pubsub.Event[session.Session]:
-		// 会话事件：转换为 API 响应格式
-		eventType = string(e.Type)
-		eventData = models.SessionToResponse(e.Payload)
-	default:
-		// 使用反射来识别事件类型
-		eventType, eventData = h.extractEventData(event)
-	}
+		// LSP 事件
+		switch e.Payload.Type {
+		case internalapp.LSPEventStateChanged:
+			resp.Type = "lsp.server.state_changed"
+			resp.Properties = map[string]interface{}{
+				"name":             e.Payload.Name,
+				"state":            e.Payload.State,
+				"error":            e.Payload.Error,
+				"diagnostic_count": e.Payload.DiagnosticCount,
+			}
+		case internalapp.LSPEventDiagnosticsChanged:
+			resp.Type = "lsp.client.diagnostics"
+			resp.Properties = map[string]interface{}{
+				"serverID":         e.Payload.Name,
+				"diagnostic_count": e.Payload.DiagnosticCount,
+			}
+		default:
+			return nil
+		}
 
-	// 序列化事件数据
-	data, err := json.Marshal(eventData)
-	if err != nil {
-		// 如果序列化失败，发送简单的事件
-		ctx.Response.SetBodyString(fmt.Sprintf("event: %s\ndata: {\"error\": \"failed to serialize event: %s\"}\n\n", eventType, err.Error()))
-		ctx.Flush()
+	case pubsub.Event[message.Message]:
+		// 消息事件
+		msgResp := models.MessageToResponse(e.Payload)
+		switch e.Type {
+		case pubsub.CreatedEvent:
+			resp.Type = "message.created"
+			resp.Properties = map[string]interface{}{
+				"info": msgResp,
+			}
+		case pubsub.UpdatedEvent:
+			resp.Type = "message.updated"
+			resp.Properties = map[string]interface{}{
+				"info": msgResp,
+			}
+		case pubsub.DeletedEvent:
+			resp.Type = "message.removed"
+			resp.Properties = map[string]interface{}{
+				"messageID": msgResp.ID,
+				"sessionID": msgResp.SessionID,
+			}
+		default:
+			return nil
+		}
+
+	case pubsub.Event[session.Session]:
+		// 会话事件
+		sessResp := models.SessionToResponse(e.Payload)
+		switch e.Type {
+		case pubsub.CreatedEvent:
+			resp.Type = "session.created"
+			resp.Properties = map[string]interface{}{
+				"session": sessResp,
+			}
+		case pubsub.UpdatedEvent:
+			resp.Type = "session.updated"
+			resp.Properties = map[string]interface{}{
+				"session": sessResp,
+			}
+		case pubsub.DeletedEvent:
+			resp.Type = "session.deleted"
+			resp.Properties = map[string]interface{}{
+				"session": sessResp,
+			}
+		default:
+			return nil
+		}
+
+	default:
+		// Unknown event type, ignore
 		return nil
 	}
 
+	// 序列化事件数据
+	data, err := json.Marshal(resp)
+	if err != nil {
+		// 如果序列化失败，发送 error 事件
+		errResp := models.SSEEvent{
+			Type: "error",
+			Properties: map[string]string{
+				"message": fmt.Sprintf("failed to serialize event: %s", err.Error()),
+			},
+		}
+		data, _ = json.Marshal(errResp)
+	}
+
 	// 发送SSE格式的事件
-	ctx.Response.SetBodyString(fmt.Sprintf("event: %s\ndata: %s\n\n", eventType, data))
+	ctx.Response.SetBodyString(fmt.Sprintf("event: %s\ndata: %s\n\n", resp.Type, data))
 	ctx.Flush()
 
 	return nil
-}
-
-// extractEventData 使用反射提取事件数据
-func (h *Handlers) extractEventData(event tea.Msg) (string, interface{}) {
-	v := reflect.ValueOf(event)
-	if !v.IsValid() || v.Kind() != reflect.Struct {
-		return "unknown", map[string]string{"type": fmt.Sprintf("%T", event)}
-	}
-
-	// 检查是否是 pubsub.Event 类型
-	eventTypeField := v.FieldByName("Type")
-	payloadField := v.FieldByName("Payload")
-
-	if !eventTypeField.IsValid() || !payloadField.IsValid() {
-		return "unknown", map[string]string{"type": fmt.Sprintf("%T", event)}
-	}
-
-	// 获取事件类型
-	eventType := ""
-	if eventTypeField.Kind() == reflect.String {
-		eventType = eventTypeField.String()
-	} else {
-		eventType = "unknown"
-	}
-
-	// 获取 payload
-	payload := payloadField.Interface()
-
-	// 尝试识别 payload 类型并转换
-	payloadType := reflect.TypeOf(payload)
-	if payloadType == nil {
-		return eventType, payload
-	}
-
-	// 检查是否是 Message 类型
-	if payloadType.Name() == "Message" && payloadType.PkgPath() == "github.com/charmbracelet/crush/internal/message" {
-		if msg, ok := payload.(message.Message); ok {
-			return eventType, models.MessageToResponse(msg)
-		}
-	}
-
-	// 检查是否是 Session 类型
-	if payloadType.Name() == "Session" && payloadType.PkgPath() == "github.com/charmbracelet/crush/internal/session" {
-		if sess, ok := payload.(session.Session); ok {
-			return eventType, models.SessionToResponse(sess)
-		}
-	}
-
-	// 其他类型，直接返回 payload
-	return eventType, payload
 }
 
 // createEventChannelForProject 为指定项目的 app 实例创建事件通道

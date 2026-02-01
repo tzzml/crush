@@ -313,13 +313,14 @@ eventLoop:
 				readBytes := messageReadBytes[msg.ID]
 
 				if len(content) > readBytes {
-					chunk := content[readBytes:]
 					messageReadBytes[msg.ID] = len(content)
 
 					// 发送内容块
 					writeSSE(ctx, models.SSEEvent{
-						Type:    "chunk",
-						Content: chunk,
+						Type: "message.updated",
+						Properties: map[string]interface{}{
+							"info": models.MessageToResponse(assistantMsg),
+						},
 					})
 					ctx.Flush()
 				}
@@ -344,10 +345,11 @@ eventLoop:
 
 	// 发送完成事件
 	writeSSE(ctx, models.SSEEvent{
-		Type:      "done",
-		MessageID: assistantMsg.ID,
-		Message:   models.MessageToResponse(assistantMsg),
-		Session:   models.SessionToResponse(updatedSession),
+		Type: "message.created",
+		Properties: map[string]interface{}{
+			"info":    models.MessageToResponse(assistantMsg),
+			"session": models.SessionToResponse(updatedSession),
+		},
 	})
 	ctx.Flush()
 }
@@ -408,9 +410,9 @@ func writeSSE(ctx *hertzapp.RequestContext, event models.SSEEvent) {
 func writeSSEError(ctx *hertzapp.RequestContext, message string) {
 	event := models.SSEEvent{
 		Type: "error",
-		Error: &models.ErrorDetail{
-			Code:    "INTERNAL_ERROR",
-			Message: message,
+		Properties: map[string]interface{}{
+			"code":    "INTERNAL_ERROR",
+			"message": message,
 		},
 	}
 	writeSSE(ctx, event)

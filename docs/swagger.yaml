@@ -1,4 +1,3 @@
-basePath: /
 definitions:
   models.AssistantMessage:
     properties:
@@ -347,6 +346,14 @@ definitions:
       type:
         type: string
     type: object
+  models.SSEEvent:
+    properties:
+      properties:
+        description: Properties 字段包含了事件的具体数据。其结构取决于 Type 字段。
+      type:
+        description: Type 字段指示事件的类型，例如 "message.created", "session.updated" 等。
+        type: string
+    type: object
   models.SearchResponse:
     properties:
       count:
@@ -462,19 +469,8 @@ definitions:
         description: SystemPrompt 更新后的系统提示词内容
         type: string
     type: object
-host: localhost:8080
 info:
-  contact:
-    email: support@swagger.io
-    name: API Support
-    url: http://www.swagger.io/support
-  description: AI 项目管理 API 服务
-  license:
-    name: Apache 2.0
-    url: http://www.apache.org/licenses/LICENSE-2.0.html
-  termsOfService: http://swagger.io/terms/
-  title: Zork Agent API
-  version: "1.0"
+  contact: {}
 paths:
   /event:
     get:
@@ -493,7 +489,7 @@ paths:
         "200":
           description: Event stream
           schema:
-            type: string
+            $ref: '#/definitions/models.SSEEvent'
         "400":
           description: Bad Request
           schema:
@@ -1259,11 +1255,11 @@ paths:
       summary: 更新会话
       tags:
       - Session
-  /session/{session_id}/abort:
+  /session/{id}/abort:
     post:
       consumes:
       - application/json
-      description: 中止指定会话的 AI 处理
+      description: 中止指定会话的 AI 处理。注意：当前实现会取消该项目下所有会话的 AI 处理。
       parameters:
       - description: 项目路径
         in: query
@@ -1272,7 +1268,7 @@ paths:
         type: string
       - description: 会话ID
         in: path
-        name: session_id
+        name: id
         required: true
         type: string
       produces:
@@ -1485,7 +1481,4 @@ paths:
       summary: 更新系统提示词
       tags:
       - Prompt
-schemes:
-- http
-- https
 swagger: "2.0"

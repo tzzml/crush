@@ -33,13 +33,13 @@ import (
 	"github.com/charmbracelet/crush/internal/oauth/copilot"
 	"github.com/charmbracelet/crush/internal/oauth/hyper"
 	"github.com/charmbracelet/crush/internal/projects"
-	"github.com/charmbracelet/crush/internal/stringext"
 	"github.com/charmbracelet/crush/internal/tui"
 	"github.com/charmbracelet/crush/internal/version"
 	"github.com/charmbracelet/fang"
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/exp/charmtone"
+	xstrings "github.com/charmbracelet/x/exp/strings"
 	"github.com/charmbracelet/x/term"
 	"github.com/invopop/jsonschema"
 	"github.com/nxadm/tail"
@@ -144,6 +144,8 @@ zorkagent run --quiet "为该项目生成 README"
   `,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		quiet, _ := cmd.Flags().GetBool("quiet")
+		largeModel, _ := cmd.Flags().GetString("model")
+		smallModel, _ := cmd.Flags().GetString("small-model")
 
 		// Cancel on SIGINT or SIGTERM.
 		ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, os.Kill)
@@ -174,7 +176,7 @@ zorkagent run --quiet "为该项目生成 README"
 		event.SetNonInteractive(true)
 		event.AppInitialized()
 
-		return app.RunNonInteractive(ctx, os.Stdout, prompt, quiet)
+		return app.RunNonInteractive(ctx, os.Stdout, prompt, largeModel, smallModel, quiet)
 	},
 	PostRun: func(cmd *cobra.Command, args []string) {
 		event.AppExited()
@@ -506,6 +508,8 @@ func init() {
 	rootCmd.Flags().BoolP("yolo", "y", false, "自动接受所有权限（危险模式）")
 
 	runCmd.Flags().BoolP("quiet", "q", false, "隐藏加载动画")
+	runCmd.Flags().StringP("model", "m", "", "Model to use. Accepts 'model' or 'provider/model' to disambiguate models with the same name across providers")
+	runCmd.Flags().String("small-model", "", "Small model to use. If not provided, uses the default small model for the provider")
 	projectsCmd.Flags().Bool("json", false, "以 JSON 格式输出")
 	dirsCmd.AddCommand(configDirCmd, dataDirCmd)
 	logsCmd.Flags().BoolP("follow", "f", false, "跟踪日志输出")
@@ -695,7 +699,7 @@ func shouldQueryTerminalVersion(env uv.Environ) bool {
 	return (!okTermProg && !okSSHTTY) ||
 		(!strings.Contains(termProg, "Apple") && !okSSHTTY) ||
 		// Terminals that do support XTVERSION.
-		stringext.ContainsAny(termType, "alacritty", "ghostty", "kitty", "rio", "wezterm")
+		xstrings.ContainsAnyOf(termType, "alacritty", "ghostty", "kitty", "rio", "wezterm")
 }
 
 func loginHyper() error {

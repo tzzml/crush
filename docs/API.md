@@ -274,3 +274,28 @@ Content-Type: application/json
 GET /event?directory=/path/to/project
 Accept: text/event-stream
 ```
+
+**响应格式 (Opencode 风格)**：
+
+所有事件都遵循统一的包装格式：
+
+```json
+{
+  "type": "event.name",
+  "properties": {
+    "key": "value"
+  }
+}
+```
+
+**常见事件类型**：
+- `server.connected`: 成功连接到事件流
+- `message.created`: 新消息已创建（或生成完成）
+- `message.updated`: 消息内容更新（流式输出中）
+- `message.removed`: 消息被删除
+- `session.created`: 新会话已创建
+- `session.updated`: 会话信息更新
+- `session.deleted`: 会话被删除
+- `lsp.server.state_changed`: LSP 服务器状态变化
+- `lsp.client.diagnostics`: LSP 诊断结果更新
+

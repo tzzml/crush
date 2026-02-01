@@ -9,16 +9,7 @@ const docTemplate = `{
     "info": {
         "description": "{{escape .Description}}",
         "title": "{{.Title}}",
-        "termsOfService": "http://swagger.io/terms/",
-        "contact": {
-            "name": "API Support",
-            "url": "http://www.swagger.io/support",
-            "email": "support@swagger.io"
-        },
-        "license": {
-            "name": "Apache 2.0",
-            "url": "http://www.apache.org/licenses/LICENSE-2.0.html"
-        },
+        "contact": {},
         "version": "{{.Version}}"
     },
     "host": "{{.Host}}",
@@ -50,7 +41,7 @@ const docTemplate = `{
                     "200": {
                         "description": "Event stream",
                         "schema": {
-                            "type": "string"
+                            "$ref": "#/definitions/models.SSEEvent"
                         }
                     },
                     "400": {
@@ -1229,6 +1220,62 @@ const docTemplate = `{
                 }
             }
         },
+        "/session/{id}/abort": {
+            "post": {
+                "description": "中止指定会话的 AI 处理。注意：当前实现会取消该项目下所有会话的 AI 处理。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Session"
+                ],
+                "summary": "中止会话",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "项目路径",
+                        "name": "directory",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "会话ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/session/{sessionID}/prompt": {
             "post": {
                 "description": "Create and send a new message to a session using Opencode SDK compatible API",
@@ -1272,62 +1319,6 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/models.PromptResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/session/{session_id}/abort": {
-            "post": {
-                "description": "中止指定会话的 AI 处理",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Session"
-                ],
-                "summary": "中止会话",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "项目路径",
-                        "name": "directory",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "会话ID",
-                        "name": "session_id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
                         }
                     },
                     "400": {
@@ -2043,6 +2034,18 @@ const docTemplate = `{
                 }
             }
         },
+        "models.SSEEvent": {
+            "type": "object",
+            "properties": {
+                "properties": {
+                    "description": "Properties 字段包含了事件的具体数据。其结构取决于 Type 字段。"
+                },
+                "type": {
+                    "description": "Type 字段指示事件的类型，例如 \"message.created\", \"session.updated\" 等。",
+                    "type": "string"
+                }
+            }
+        },
         "models.SearchResponse": {
             "type": "object",
             "properties": {
@@ -2224,12 +2227,12 @@ const docTemplate = `{
 
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
-	Version:          "1.0",
-	Host:             "localhost:8080",
-	BasePath:         "/",
-	Schemes:          []string{"http", "https"},
-	Title:            "Zork Agent API",
-	Description:      "AI 项目管理 API 服务",
+	Version:          "",
+	Host:             "",
+	BasePath:         "",
+	Schemes:          []string{},
+	Title:            "",
+	Description:      "",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

@@ -38,9 +38,9 @@
           "200": {
             "description": "Event stream",
             "content": {
-              "application/json": {
+              "text/event-stream": {
                 "schema": {
-                  "type": "string"
+                  "$ref": "#/components/schemas/models.SSEEvent"
                 }
               }
             }
@@ -2720,6 +2720,96 @@
           "message": {
             "type": "string",
             "description": "操作结果消息（可选）"
+          }
+        }
+      },
+      "models.SSEEvent": {
+        "type": "object",
+        "required": [
+          "type",
+          "properties"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "message.created",
+              "message.updated",
+              "message.removed",
+              "session.created",
+              "session.updated",
+              "session.deleted",
+              "lsp.server.state_changed",
+              "lsp.client.diagnostics",
+              "server.connected"
+            ]
+          },
+          "properties": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "info": {
+                    "$ref": "#/components/schemas/models.MessageResponse"
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "messageID": {
+                    "type": "string"
+                  },
+                  "sessionID": {
+                    "type": "string"
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "session": {
+                    "$ref": "#/components/schemas/models.SessionResponse"
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "error": {
+                    "type": "string"
+                  },
+                  "diagnostic_count": {
+                    "type": "integer"
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "serverID": {
+                    "type": "string"
+                  },
+                  "diagnostic_count": {
+                    "type": "integer"
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string"
+                  }
+                }
+              }
+            ]
           }
         }
       }

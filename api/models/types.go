@@ -146,13 +146,12 @@ type MessageDetailResponse struct {
 
 // SSE 事件类型
 
+// SSEEvent 表示服务器发送的事件响应 (Opencode 风格)
 type SSEEvent struct {
-	Type      string          `json:"type"`
-	MessageID string          `json:"message_id,omitempty"`
-	Content   string          `json:"content,omitempty"`
-	Message   MessageResponse `json:"message,omitempty"`
-	Session   SessionResponse `json:"session,omitempty"`
-	Error     *ErrorDetail    `json:"error,omitempty"`
+	// Properties 字段包含了事件的具体数据。其结构取决于 Type 字段。
+	Properties interface{} `json:"properties"`
+	// Type 字段指示事件的类型，例如 "message.created", "session.updated" 等。
+	Type string `json:"type"`
 }
 
 // Config API
@@ -310,7 +309,7 @@ func MessageToResponse(m message.Message) MessageResponse {
 // partToMap converts a ContentPart to a map for JSON serialization
 func partToMap(part message.ContentPart) map[string]interface{} {
 	result := make(map[string]interface{})
-	
+
 	switch p := part.(type) {
 	case message.TextContent:
 		result["type"] = "text"
@@ -382,6 +381,6 @@ func partToMap(part message.ContentPart) map[string]interface{} {
 	default:
 		return nil
 	}
-	
+
 	return result
 }
