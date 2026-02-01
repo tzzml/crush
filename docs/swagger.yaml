@@ -328,6 +328,12 @@ definitions:
       parts:
         items: {}
         type: array
+      system:
+        type: string
+      tools:
+        additionalProperties:
+          type: boolean
+        type: object
     type: object
   models.PromptResponse:
     properties:

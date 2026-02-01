@@ -1985,6 +1985,15 @@
                 "messageID": {
                     "type": "string"
                 },
+                "system": {
+                    "type": "string"
+                },
+                "tools": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "boolean"
+                    }
+                },
                 "model": {
                     "$ref": "#/definitions/models.ModelSpec"
                 },
@@ -2025,6 +2034,7 @@
         },
         "models.SSEEvent": {
             "type": "object",
+            "discriminator": "type",
             "properties": {
                 "properties": {
                     "description": "Properties 字段包含了事件的具体数据。其结构取决于 Type 字段。"
@@ -2207,6 +2217,98 @@
                 },
                 "system_prompt": {
                     "description": "SystemPrompt 更新后的系统提示词内容",
+                    "type": "string"
+                }
+            }
+        },
+        "models.EventMessageCreated": {
+            "type": "object",
+            "properties": {
+                "info": {
+                    "type": "object",
+                    "additionalProperties": true
+                }
+            }
+        },
+        "models.EventMessageUpdated": {
+            "type": "object",
+            "properties": {
+                "info": {
+                    "type": "object",
+                    "additionalProperties": true
+                }
+            }
+        },
+        "models.EventMessageRemoved": {
+            "type": "object",
+            "properties": {
+                "messageID": {
+                    "type": "string"
+                },
+                "sessionID": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.EventSessionCreated": {
+            "type": "object",
+            "properties": {
+                "session": {
+                    "type": "object",
+                    "additionalProperties": true
+                }
+            }
+        },
+        "models.EventSessionUpdated": {
+            "type": "object",
+            "properties": {
+                "session": {
+                    "type": "object",
+                    "additionalProperties": true
+                }
+            }
+        },
+        "models.EventSessionDeleted": {
+            "type": "object",
+            "properties": {
+                "session": {
+                    "type": "object",
+                    "additionalProperties": true
+                }
+            }
+        },
+        "models.EventLspStateChanged": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "state": {
+                    "type": "string"
+                },
+                "error": {
+                    "type": "string"
+                },
+                "diagnostic_count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "models.EventLspDiagnosticsChanged": {
+            "type": "object",
+            "properties": {
+                "serverID": {
+                    "type": "string"
+                },
+                "diagnostic_count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "models.EventServerConnected": {
+            "type": "object",
+            "properties": {
+                "status": {
                     "type": "string"
                 }
             }

@@ -1,19 +1,7 @@
 {
   "openapi": "3.0.0",
   "info": {
-    "description": "AI 项目管理 API 服务",
-    "title": "Zork Agent API",
-    "termsOfService": "http://swagger.io/terms/",
-    "contact": {
-      "name": "API Support",
-      "url": "http://www.swagger.io/support",
-      "email": "support@swagger.io"
-    },
-    "license": {
-      "name": "Apache 2.0",
-      "url": "http://www.apache.org/licenses/LICENSE-2.0.html"
-    },
-    "version": "1.0"
+    "contact": {}
   },
   "paths": {
     "/event": {
@@ -21,7 +9,7 @@
         "tags": [
           "Event"
         ],
-        "summary": "服务器发送事件",
+        "summary": "订阅服务器事件",
         "description": "订阅项目的实时事件流",
         "parameters": [
           {
@@ -38,7 +26,7 @@
           "200": {
             "description": "Event stream",
             "content": {
-              "text/event-stream": {
+              "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/models.SSEEvent"
                 }
@@ -1433,13 +1421,13 @@
         }
       }
     },
-    "/session/{session_id}/abort": {
+    "/session/{id}/abort": {
       "post": {
         "tags": [
           "Session"
         ],
         "summary": "中止会话",
-        "description": "中止指定会话的 AI 处理",
+        "description": "中止指定会话的 AI 处理。注意：当前实现会取消该项目下所有会话的 AI 处理。",
         "parameters": [
           {
             "name": "directory",
@@ -1451,7 +1439,7 @@
             }
           },
           {
-            "name": "session_id",
+            "name": "id",
             "in": "path",
             "description": "会话ID",
             "required": true,
@@ -1499,77 +1487,13 @@
         }
       }
     },
-    "/session/{sessionID}/message": {
-      "get": {
-        "tags": [
-          "Message"
-        ],
-        "summary": "获取消息列表",
-        "description": "获取指定会话的所有消息",
-        "parameters": [
-          {
-            "name": "directory",
-            "in": "query",
-            "description": "项目路径",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "sessionID",
-            "in": "path",
-            "description": "会话ID",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/models.MessagesResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/session/{sessionID}/prompt": {
       "post": {
         "tags": [
-          "Prompt"
+          "Session"
         ],
         "summary": "Send message (Opencode compatible)",
         "description": "Create and send a new message to a session using Opencode SDK compatible API",
-        "operationId": "session.prompt",
         "parameters": [
           {
             "name": "directory",
@@ -1636,10 +1560,73 @@
         }
       }
     },
+    "/session/{session_id}/message": {
+      "get": {
+        "tags": [
+          "Message"
+        ],
+        "summary": "获取消息列表",
+        "description": "获取指定会话的所有消息",
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "description": "项目路径",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "会话ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/models.MessagesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/system-prompt": {
       "get": {
         "tags": [
-          "System Prompt"
+          "Prompt"
         ],
         "summary": "获取系统提示词",
         "description": "获取指定项目当前的系统提示词内容",
@@ -1670,7 +1657,8 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/map[string]interface{}"
+                  "type": "object",
+                  "additionalProperties": true
                 }
               }
             }
@@ -1680,7 +1668,8 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/map[string]interface{}"
+                  "type": "object",
+                  "additionalProperties": true
                 }
               }
             }
@@ -1690,7 +1679,8 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/map[string]interface{}"
+                  "type": "object",
+                  "additionalProperties": true
                 }
               }
             }
@@ -1699,7 +1689,7 @@
       },
       "put": {
         "tags": [
-          "System Prompt"
+          "Prompt"
         ],
         "summary": "更新系统提示词",
         "description": "动态修改指定项目的系统提示词，无需重启服务。更新后立即对后续对话生效。",
@@ -1740,7 +1730,8 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/map[string]interface{}"
+                  "type": "object",
+                  "additionalProperties": true
                 }
               }
             }
@@ -1750,7 +1741,8 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/map[string]interface{}"
+                  "type": "object",
+                  "additionalProperties": true
                 }
               }
             }
@@ -1760,7 +1752,8 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/map[string]interface{}"
+                  "type": "object",
+                  "additionalProperties": true
                 }
               }
             }
@@ -1771,6 +1764,56 @@
   },
   "components": {
     "schemas": {
+      "models.AssistantMessage": {
+        "type": "object",
+        "properties": {
+          "agent": {
+            "type": "string"
+          },
+          "cost": {
+            "type": "number"
+          },
+          "finish": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "modelID": {
+            "type": "string"
+          },
+          "parentID": {
+            "type": "string"
+          },
+          "providerID": {
+            "type": "string"
+          },
+          "role": {
+            "description": "\"assistant\"",
+            "type": "string"
+          },
+          "sessionID": {
+            "type": "string"
+          },
+          "time": {
+            "$ref": "#/components/schemas/models.MessageTime"
+          },
+          "tokens": {
+            "$ref": "#/components/schemas/models.TokenInfo"
+          }
+        }
+      },
+      "models.CacheTokenInfo": {
+        "type": "object",
+        "properties": {
+          "read": {
+            "type": "integer"
+          },
+          "write": {
+            "type": "integer"
+          }
+        }
+      },
       "models.ConfigResponse": {
         "type": "object",
         "properties": {
@@ -1791,376 +1834,6 @@
           },
           "working_dir": {
             "type": "string"
-          }
-        }
-      },
-      "models.PromptRequest": {
-        "type": "object",
-        "properties": {
-          "messageID": {
-            "type": "string"
-          },
-          "model": {
-            "$ref": "#/components/schemas/models.ModelSpec"
-          },
-          "agent": {
-            "type": "string"
-          },
-          "noReply": {
-            "type": "boolean"
-          },
-          "parts": {
-            "type": "array",
-            "items": {
-              "oneOf": [
-                {
-                  "type": "object",
-                  "required": [
-                    "text"
-                  ],
-                  "properties": {
-                    "text": {
-                      "type": "string"
-                    }
-                  }
-                },
-                {
-                  "type": "object",
-                  "required": [
-                    "name",
-                    "data"
-                  ],
-                  "properties": {
-                    "name": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "type": "string",
-                      "description": "base64 encoded file data"
-                    }
-                  }
-                },
-                {
-                  "type": "object",
-                  "required": [
-                    "prompt"
-                  ],
-                  "properties": {
-                    "prompt": {
-                      "type": "string"
-                    },
-                    "agent": {
-                      "type": "string"
-                    },
-                    "model": {
-                      "$ref": "#/components/schemas/models.ModelSpec"
-                    },
-                    "command": {
-                      "type": "string"
-                    }
-                  }
-                }
-              ]
-            }
-          }
-        },
-        "required": [
-          "parts"
-        ]
-      },
-      "models.PromptResponse": {
-        "type": "object",
-        "properties": {
-          "info": {
-            "$ref": "#/components/schemas/models.AssistantMessage"
-          },
-          "parts": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/models.Part"
-            }
-          }
-        },
-        "required": [
-          "info",
-          "parts"
-        ]
-      },
-      "models.AssistantMessage": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "sessionID": {
-            "type": "string"
-          },
-          "role": {
-            "type": "string",
-            "const": "assistant"
-          },
-          "time": {
-            "$ref": "#/components/schemas/models.MessageTime"
-          },
-          "parentID": {
-            "type": "string"
-          },
-          "modelID": {
-            "type": "string"
-          },
-          "providerID": {
-            "type": "string"
-          },
-          "agent": {
-            "type": "string"
-          },
-          "cost": {
-            "type": "number"
-          },
-          "tokens": {
-            "$ref": "#/components/schemas/models.TokenInfo"
-          },
-          "finish": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "sessionID",
-          "role",
-          "time"
-        ]
-      },
-      "models.MessageTime": {
-        "type": "object",
-        "properties": {
-          "created": {
-            "type": "integer"
-          },
-          "completed": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "created"
-        ]
-      },
-      "models.ModelSpec": {
-        "type": "object",
-        "properties": {
-          "providerID": {
-            "type": "string"
-          },
-          "modelID": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "providerID",
-          "modelID"
-        ]
-      },
-      "models.TokenInfo": {
-        "type": "object",
-        "properties": {
-          "input": {
-            "type": "integer"
-          },
-          "output": {
-            "type": "integer"
-          },
-          "reasoning": {
-            "type": "integer"
-          },
-          "cache": {
-            "$ref": "#/components/schemas/models.CacheTokenInfo"
-          }
-        },
-        "required": [
-          "input",
-          "output"
-        ]
-      },
-      "models.CacheTokenInfo": {
-        "type": "object",
-        "properties": {
-          "read": {
-            "type": "integer"
-          },
-          "write": {
-            "type": "integer"
-          }
-        }
-      },
-      "models.Part": {
-        "oneOf": [
-          {
-            "type": "object",
-            "required": [
-              "type",
-              "text"
-            ],
-            "properties": {
-              "type": {
-                "type": "string",
-                "const": "text"
-              },
-              "id": {
-                "type": "string"
-              },
-              "sessionID": {
-                "type": "string"
-              },
-              "messageID": {
-                "type": "string"
-              },
-              "text": {
-                "type": "string"
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": [
-              "type",
-              "text"
-            ],
-            "properties": {
-              "type": {
-                "type": "string",
-                "const": "reasoning"
-              },
-              "id": {
-                "type": "string"
-              },
-              "sessionID": {
-                "type": "string"
-              },
-              "messageID": {
-                "type": "string"
-              },
-              "text": {
-                "type": "string"
-              },
-              "time": {
-                "$ref": "#/components/schemas/models.MessageTime"
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": [
-              "type",
-              "name",
-              "data"
-            ],
-            "properties": {
-              "type": {
-                "type": "string",
-                "const": "file"
-              },
-              "id": {
-                "type": "string"
-              },
-              "sessionID": {
-                "type": "string"
-              },
-              "messageID": {
-                "type": "string"
-              },
-              "name": {
-                "type": "string"
-              },
-              "data": {
-                "type": "string",
-                "description": "base64 encoded file data"
-              },
-              "mimeType": {
-                "type": "string"
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": [
-              "type",
-              "name",
-              "input"
-            ],
-            "properties": {
-              "type": {
-                "type": "string",
-                "const": "tool"
-              },
-              "id": {
-                "type": "string"
-              },
-              "sessionID": {
-                "type": "string"
-              },
-              "messageID": {
-                "type": "string"
-              },
-              "name": {
-                "type": "string"
-              },
-              "input": {
-                "type": "string"
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": [
-              "type",
-              "name"
-            ],
-            "properties": {
-              "type": {
-                "type": "string",
-                "const": "tool_result"
-              },
-              "id": {
-                "type": "string"
-              },
-              "sessionID": {
-                "type": "string"
-              },
-              "messageID": {
-                "type": "string"
-              },
-              "name": {
-                "type": "string"
-              },
-              "output": {
-                "type": "string"
-              },
-              "error": {
-                "type": "string"
-              }
-            }
-          }
-        ]
-      },
-      "models.CreateMessageRequest": {
-        "type": "object",
-        "properties": {
-          "prompt": {
-            "type": "string"
-          },
-          "stream": {
-            "type": "boolean"
-          }
-        }
-      },
-      "models.CreateMessageResponse": {
-        "type": "object",
-        "properties": {
-          "message": {
-            "$ref": "#/components/schemas/models.MessageResponse"
-          },
-          "session": {
-            "$ref": "#/components/schemas/models.SessionResponse"
           }
         }
       },
@@ -2313,6 +1986,23 @@
           }
         }
       },
+      "models.GetSystemPromptResponse": {
+        "type": "object",
+        "properties": {
+          "is_custom": {
+            "description": "IsCustom 是否为自定义提示词（非空表示已自定义）",
+            "type": "boolean"
+          },
+          "length": {
+            "description": "Length 系统提示词的字符数",
+            "type": "integer"
+          },
+          "system_prompt": {
+            "description": "SystemPrompt 当前的系统提示词内容",
+            "type": "string"
+          }
+        }
+      },
       "models.GitFileStatus": {
         "type": "object",
         "properties": {
@@ -2442,6 +2132,17 @@
           }
         }
       },
+      "models.MessageTime": {
+        "type": "object",
+        "properties": {
+          "completed": {
+            "type": "integer"
+          },
+          "created": {
+            "type": "integer"
+          }
+        }
+      },
       "models.MessagesResponse": {
         "type": "object",
         "properties": {
@@ -2453,6 +2154,17 @@
           },
           "total": {
             "type": "integer"
+          }
+        }
+      },
+      "models.ModelSpec": {
+        "type": "object",
+        "properties": {
+          "modelID": {
+            "type": "string"
+          },
+          "providerID": {
+            "type": "string"
           }
         }
       },
@@ -2533,6 +2245,48 @@
           }
         }
       },
+      "models.PromptRequest": {
+        "type": "object",
+        "properties": {
+          "agent": {
+            "type": "string"
+          },
+          "messageID": {
+            "type": "string"
+          },
+          "system": {
+            "type": "string"
+          },
+          "tools": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "boolean"
+            }
+          },
+          "model": {
+            "$ref": "#/components/schemas/models.ModelSpec"
+          },
+          "noReply": {
+            "type": "boolean"
+          },
+          "parts": {
+            "type": "array",
+            "items": {}
+          }
+        }
+      },
+      "models.PromptResponse": {
+        "type": "object",
+        "properties": {
+          "info": {
+            "$ref": "#/components/schemas/models.AssistantMessage"
+          },
+          "parts": {
+            "type": "array",
+            "items": {}
+          }
+        }
+      },
       "models.ProviderInfo": {
         "type": "object",
         "properties": {
@@ -2544,6 +2298,52 @@
           },
           "type": {
             "type": "string"
+          }
+        }
+      },
+      "models.SSEEvent": {
+        "type": "object",
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/models.SSEEventMessageCreatedWrapper"
+          },
+          {
+            "$ref": "#/components/schemas/models.SSEEventMessageUpdatedWrapper"
+          },
+          {
+            "$ref": "#/components/schemas/models.SSEEventMessageRemovedWrapper"
+          },
+          {
+            "$ref": "#/components/schemas/models.SSEEventSessionCreatedWrapper"
+          },
+          {
+            "$ref": "#/components/schemas/models.SSEEventSessionUpdatedWrapper"
+          },
+          {
+            "$ref": "#/components/schemas/models.SSEEventSessionDeletedWrapper"
+          },
+          {
+            "$ref": "#/components/schemas/models.SSEEventLspStateChangedWrapper"
+          },
+          {
+            "$ref": "#/components/schemas/models.SSEEventLspDiagnosticsChangedWrapper"
+          },
+          {
+            "$ref": "#/components/schemas/models.SSEEventServerConnectedWrapper"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "type",
+          "mapping": {
+            "message.created": "#/components/schemas/models.SSEEventMessageCreatedWrapper",
+            "message.updated": "#/components/schemas/models.SSEEventMessageUpdatedWrapper",
+            "message.removed": "#/components/schemas/models.SSEEventMessageRemovedWrapper",
+            "session.created": "#/components/schemas/models.SSEEventSessionCreatedWrapper",
+            "session.updated": "#/components/schemas/models.SSEEventSessionUpdatedWrapper",
+            "session.deleted": "#/components/schemas/models.SSEEventSessionDeletedWrapper",
+            "lsp.server.state_changed": "#/components/schemas/models.SSEEventLspStateChangedWrapper",
+            "lsp.client.diagnostics": "#/components/schemas/models.SSEEventLspDiagnosticsChangedWrapper",
+            "server.connected": "#/components/schemas/models.SSEEventServerConnectedWrapper"
           }
         }
       },
@@ -2661,6 +2461,23 @@
           }
         }
       },
+      "models.TokenInfo": {
+        "type": "object",
+        "properties": {
+          "cache": {
+            "$ref": "#/components/schemas/models.CacheTokenInfo"
+          },
+          "input": {
+            "type": "integer"
+          },
+          "output": {
+            "type": "integer"
+          },
+          "reasoning": {
+            "type": "integer"
+          }
+        }
+      },
       "models.UpdateSessionRequest": {
         "type": "object",
         "properties": {
@@ -2677,23 +2494,6 @@
           }
         }
       },
-      "models.GetSystemPromptResponse": {
-        "type": "object",
-        "properties": {
-          "system_prompt": {
-            "type": "string",
-            "description": "当前的系统提示词内容"
-          },
-          "length": {
-            "type": "integer",
-            "description": "系统提示词的字符数"
-          },
-          "is_custom": {
-            "type": "boolean",
-            "description": "是否为自定义提示词（非空表示已自定义）"
-          }
-        }
-      },
       "models.UpdateSystemPromptRequest": {
         "type": "object",
         "required": [
@@ -2701,126 +2501,282 @@
         ],
         "properties": {
           "system_prompt": {
-            "type": "string",
-            "description": "新的系统提示词内容"
+            "description": "SystemPrompt 新的系统提示词内容",
+            "type": "string"
           }
         }
       },
       "models.UpdateSystemPromptResponse": {
         "type": "object",
         "properties": {
+          "message": {
+            "description": "Message 操作结果消息（可选）",
+            "type": "string"
+          },
           "success": {
-            "type": "boolean",
-            "description": "是否成功更新"
+            "description": "Success 是否成功更新",
+            "type": "boolean"
           },
           "system_prompt": {
-            "type": "string",
-            "description": "更新后的系统提示词内容"
-          },
-          "message": {
-            "type": "string",
-            "description": "操作结果消息（可选）"
+            "description": "SystemPrompt 更新后的系统提示词内容",
+            "type": "string"
           }
         }
       },
-      "models.SSEEvent": {
+      "models.EventMessageCreated": {
         "type": "object",
-        "required": [
-          "type",
-          "properties"
-        ],
+        "properties": {
+          "info": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      },
+      "models.EventMessageUpdated": {
+        "type": "object",
+        "properties": {
+          "info": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      },
+      "models.EventMessageRemoved": {
+        "type": "object",
+        "properties": {
+          "messageID": {
+            "type": "string"
+          },
+          "sessionID": {
+            "type": "string"
+          }
+        }
+      },
+      "models.EventSessionCreated": {
+        "type": "object",
+        "properties": {
+          "session": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      },
+      "models.EventSessionUpdated": {
+        "type": "object",
+        "properties": {
+          "session": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      },
+      "models.EventSessionDeleted": {
+        "type": "object",
+        "properties": {
+          "session": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      },
+      "models.EventLspStateChanged": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "error": {
+            "type": "string"
+          },
+          "diagnostic_count": {
+            "type": "integer"
+          }
+        }
+      },
+      "models.EventLspDiagnosticsChanged": {
+        "type": "object",
+        "properties": {
+          "serverID": {
+            "type": "string"
+          },
+          "diagnostic_count": {
+            "type": "integer"
+          }
+        }
+      },
+      "models.EventServerConnected": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "models.SSEEventMessageCreatedWrapper": {
+        "type": "object",
         "properties": {
           "type": {
             "type": "string",
             "enum": [
-              "message.created",
-              "message.updated",
-              "message.removed",
-              "session.created",
-              "session.updated",
-              "session.deleted",
-              "lsp.server.state_changed",
-              "lsp.client.diagnostics",
+              "message.created"
+            ]
+          },
+          "properties": {
+            "$ref": "#/components/schemas/models.EventMessageCreated"
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "models.SSEEventMessageUpdatedWrapper": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "message.updated"
+            ]
+          },
+          "properties": {
+            "$ref": "#/components/schemas/models.EventMessageUpdated"
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "models.SSEEventMessageRemovedWrapper": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "message.removed"
+            ]
+          },
+          "properties": {
+            "$ref": "#/components/schemas/models.EventMessageRemoved"
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "models.SSEEventSessionCreatedWrapper": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "session.created"
+            ]
+          },
+          "properties": {
+            "$ref": "#/components/schemas/models.EventSessionCreated"
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "models.SSEEventSessionUpdatedWrapper": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "session.updated"
+            ]
+          },
+          "properties": {
+            "$ref": "#/components/schemas/models.EventSessionUpdated"
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "models.SSEEventSessionDeletedWrapper": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "session.deleted"
+            ]
+          },
+          "properties": {
+            "$ref": "#/components/schemas/models.EventSessionDeleted"
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "models.SSEEventLspStateChangedWrapper": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "lsp.server.state_changed"
+            ]
+          },
+          "properties": {
+            "$ref": "#/components/schemas/models.EventLspStateChanged"
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "models.SSEEventLspDiagnosticsChangedWrapper": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "lsp.client.diagnostics"
+            ]
+          },
+          "properties": {
+            "$ref": "#/components/schemas/models.EventLspDiagnosticsChanged"
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "models.SSEEventServerConnectedWrapper": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
               "server.connected"
             ]
           },
           "properties": {
-            "oneOf": [
-              {
-                "type": "object",
-                "properties": {
-                  "info": {
-                    "$ref": "#/components/schemas/models.MessageResponse"
-                  }
-                }
-              },
-              {
-                "type": "object",
-                "properties": {
-                  "messageID": {
-                    "type": "string"
-                  },
-                  "sessionID": {
-                    "type": "string"
-                  }
-                }
-              },
-              {
-                "type": "object",
-                "properties": {
-                  "session": {
-                    "$ref": "#/components/schemas/models.SessionResponse"
-                  }
-                }
-              },
-              {
-                "type": "object",
-                "properties": {
-                  "name": {
-                    "type": "string"
-                  },
-                  "state": {
-                    "type": "string"
-                  },
-                  "error": {
-                    "type": "string"
-                  },
-                  "diagnostic_count": {
-                    "type": "integer"
-                  }
-                }
-              },
-              {
-                "type": "object",
-                "properties": {
-                  "serverID": {
-                    "type": "string"
-                  },
-                  "diagnostic_count": {
-                    "type": "integer"
-                  }
-                }
-              },
-              {
-                "type": "object",
-                "properties": {
-                  "status": {
-                    "type": "string"
-                  }
-                }
-              }
-            ]
+            "$ref": "#/components/schemas/models.EventServerConnected"
           }
-        }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
       }
     }
-  },
-  "servers": [
-    {
-      "url": "http://localhost:8080/"
-    },
-    {
-      "url": "https://localhost:8080/"
-    }
-  ]
+  }
 }
