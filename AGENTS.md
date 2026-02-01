@@ -75,3 +75,13 @@ func TestYourFunction(t *testing.T) {
 
 ## Working on the TUI (UI)
 Anytime you need to work on the tui before starting work read the internal/ui/AGENTS.md file
+
+## Project Specific Preferences
+
+- **Language**: Always respond and document in **Chinese** (中文).
+- **Upstream Syncing**:
+  - This project is a fork of `github.com/charmbracelet/crush`.
+  - Logic: Preserve `api/` directory and custom `internal/` modifications.
+  - Process: Use `git fetch upstream` and `git merge upstream/main`. 
+  - Conflict resolution: Use `go mod tidy` for `go.mod`/`go.sum` conflicts.
+  - See [.agent/workflows/sync-upstream.md](file:///.agent/workflows/sync-upstream.md) for full details.
