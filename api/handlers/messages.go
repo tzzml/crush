@@ -23,18 +23,18 @@ import (
 //	@Accept			json
 //	@Produce		json
 //	@Param			directory	query		string	true	"项目路径"
-//	@Param			session_id	path		string	true	"会话ID"
+//	@Param			sessionID	path		string	true	"会话ID"
 //	@Success		200			{object}	models.MessagesResponse
 //	@Failure		400			{object}	map[string]interface{}
 //	@Failure		404			{object}	map[string]interface{}
-//	@Router			/session/{session_id}/message [get]
+//	@Router			/session/{sessionID}/message [get]
 func (h *Handlers) HandleListMessages(c context.Context, ctx *hertzapp.RequestContext) {
 	projectPath := string(ctx.Query("directory"))
 	if projectPath == "" {
 		WriteError(c, ctx, "MISSING_DIRECTORY_PARAM", "Directory query parameter is required", consts.StatusBadRequest)
 		return
 	}
-	sessionID := ctx.Param("session_id")
+	sessionID := ctx.Param("sessionID")
 
 	// 获取项目的 app 实例
 	appInstance, err := h.GetAppForProject(c, projectPath)

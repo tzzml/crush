@@ -27,7 +27,7 @@ func NewServer(host string, port int) *Server {
 	h := hertzserver.New(
 		hertzserver.WithHostPorts(addr),
 		hertzserver.WithReadTimeout(30*time.Second),
-		hertzserver.WithWriteTimeout(30*time.Second),
+		// hertzserver.WithWriteTimeout(30*time.Second),
 		hertzserver.WithIdleTimeout(120*time.Second),
 	)
 

@@ -1,0 +1,139 @@
+[
+    {
+        "properties": {
+            "info": {
+                "content": "",
+                "created_at": 1769957335,
+                "id": "db3adff7-f043-447a-ba8d-d05a65ec506e",
+                "is_summary_message": false,
+                "model": "glm-4.7",
+                "parts": [
+                    {
+                        "started_at": 1769957336,
+                        "thinking": "用户用中文",
+                        "type": "reasoning"
+                    }
+                ],
+                "provider": "zai",
+                "role": "assistant",
+                "session_id": "ead2a0cf-4f8e-4ae9-be53-a1c3a8b3bccb",
+                "updated_at": 1769957336
+            }
+        },
+        "type": "message.updated"
+    },
+    {
+        "properties": {
+            "info": {
+                "content": "",
+                "created_at": 1769957335,
+                "id": "db3adff7-f043-447a-ba8d-d05a65ec506e",
+                "is_summary_message": false,
+                "model": "glm-4.7",
+                "parts": [
+                    {
+                        "started_at": 1769957336,
+                        "thinking": "用户用中文问我",
+                        "type": "reasoning"
+                    }
+                ],
+                "provider": "zai",
+                "role": "assistant",
+                "session_id": "ead2a0cf-4f8e-4ae9-be53-a1c3a8b3bccb",
+                "updated_at": 1769957336
+            }
+        },
+        "type": "message.updated"
+    },
+    {
+        "properties": {
+            "info": {
+                "content": "小明去理发店理发，理发师问：\"你要怎么理？\"\n小明说：\"给我理个最帅的发型！\"\n理发师看了看小明，说：\"那还是带假发吧",
+                "created_at": 1769957335,
+                "id": "db3adff7-f043-447a-ba8d-d05a65ec506e",
+                "is_summary_message": false,
+                "model": "glm-4.7",
+                "parts": [
+                    {
+                        "finished_at": 1769957337,
+                        "started_at": 1769957336,
+                        "thinking": "用户用中文问我：\"再讲个小笑话\"，意思是 \"Tell another small joke\" 或 \"Tell me another joke\"。\n\n根据我的指导原则，我应该保持简洁。用户只是在请求一个小笑话，这是一个简单直接的请求，不需要使用任何工具。\n\n我应该直接回答一个简短的中文笑话。",
+                        "type": "reasoning"
+                    },
+                    {
+                        "text": "小明去理发店理发，理发师问：\"你要怎么理？\"\n小明说：\"给我理个最帅的发型！\"\n理发师看了看小明，说：\"那还是带假发吧",
+                        "type": "text"
+                    }
+                ],
+                "provider": "zai",
+                "role": "assistant",
+                "session_id": "ead2a0cf-4f8e-4ae9-be53-a1c3a8b3bccb",
+                "updated_at": 1769957338
+            }
+        },
+        "type": "message.updated"
+    },
+    {
+        "properties": {
+            "info": {
+                "content": "小明去理发店理发，理发师问：\"你要怎么理？\"\n小明说：\"给我理个最帅的发型！\"\n理发师看了看小明，说：\"那还是带假发吧！\"",
+                "created_at": 1769957335,
+                "id": "db3adff7-f043-447a-ba8d-d05a65ec506e",
+                "is_summary_message": false,
+                "model": "glm-4.7",
+                "parts": [
+                    {
+                        "finished_at": 1769957337,
+                        "started_at": 1769957336,
+                        "thinking": "用户用中文问我：\"再讲个小笑话\"，意思是 \"Tell another small joke\" 或 \"Tell me another joke\"。\n\n根据我的指导原则，我应该保持简洁。用户只是在请求一个小笑话，这是一个简单直接的请求，不需要使用任何工具。\n\n我应该直接回答一个简短的中文笑话。",
+                        "type": "reasoning"
+                    },
+                    {
+                        "text": "小明去理发店理发，理发师问：\"你要怎么理？\"\n小明说：\"给我理个最帅的发型！\"\n理发师看了看小明，说：\"那还是带假发吧！\"",
+                        "type": "text"
+                    }
+                ],
+                "provider": "zai",
+                "role": "assistant",
+                "session_id": "ead2a0cf-4f8e-4ae9-be53-a1c3a8b3bccb",
+                "updated_at": 1769957338
+            }
+        },
+        "type": "message.updated"
+    },
+    {
+        "properties": {
+            "info": {
+                "content": "小明去理发店理发，理发师问：\"你要怎么理？\"\n小明说：\"给我理个最帅的发型！\"\n理发师看了看小明，说：\"那还是带假发吧！\"",
+                "created_at": 1769957335,
+                "finish_reason": "end_turn",
+                "finished_at": 1769957339,
+                "id": "db3adff7-f043-447a-ba8d-d05a65ec506e",
+                "is_summary_message": false,
+                "model": "glm-4.7",
+                "parts": [
+                    {
+                        "finished_at": 1769957337,
+                        "started_at": 1769957336,
+                        "thinking": "用户用中文问我：\"再讲个小笑话\"，意思是 \"Tell another small joke\" 或 \"Tell me another joke\"。\n\n根据我的指导原则，我应该保持简洁。用户只是在请求一个小笑话，这是一个简单直接的请求，不需要使用任何工具。\n\n我应该直接回答一个简短的中文笑话。",
+                        "type": "reasoning"
+                    },
+                    {
+                        "text": "小明去理发店理发，理发师问：\"你要怎么理？\"\n小明说：\"给我理个最帅的发型！\"\n理发师看了看小明，说：\"那还是带假发吧！\"",
+                        "type": "text"
+                    },
+                    {
+                        "reason": "end_turn",
+                        "time": 1769957339,
+                        "type": "finish"
+                    }
+                ],
+                "provider": "zai",
+                "role": "assistant",
+                "session_id": "ead2a0cf-4f8e-4ae9-be53-a1c3a8b3bccb",
+                "updated_at": 1769957339
+            }
+        },
+        "type": "message.updated"
+    }
+]
