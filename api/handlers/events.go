@@ -276,11 +276,13 @@ func (h *Handlers) processMessageUpdate(w io.Writer, msg message.Message, messag
 
 		switch p := part.(type) {
 		case message.ReasoningContent:
-			// 计算 current reasoning 增量
+			// 计算 reasoning 增量（使用 rune 处理多字节字符）
+			thinkingRunes := []rune(p.Thinking)
 			lastLen := state.lengths[partIndex]
-			currentLen := len(p.Thinking)
+			currentLen := len(thinkingRunes)
 			if currentLen > lastLen {
-				delta := p.Thinking[lastLen:]
+				deltaRunes := thinkingRunes[lastLen:]
+				delta := string(deltaRunes)
 				state.lengths[partIndex] = currentLen
 
 				// 构建 part 更新事件
@@ -310,11 +312,13 @@ func (h *Handlers) processMessageUpdate(w io.Writer, msg message.Message, messag
 			}
 
 		case message.TextContent:
-			// 计算 current text 增量
+			// 计算 text 增量（使用 rune 处理多字节字符）
+			textRunes := []rune(p.Text)
 			lastLen := state.lengths[partIndex]
-			currentLen := len(p.Text)
+			currentLen := len(textRunes)
 			if currentLen > lastLen {
-				delta := p.Text[lastLen:]
+				deltaRunes := textRunes[lastLen:]
+				delta := string(deltaRunes)
 				state.lengths[partIndex] = currentLen
 
 				// 构建 part 更新事件
