@@ -186,6 +186,9 @@ func (h *Handlers) waitForAIResponse(c context.Context, sessionID, prompt string
 	messageEvents := appInstance.Messages.Subscribe(c)
 	timeout := time.After(promptTimeout)
 
+	// 标记 Run() 是否已完成
+	runCompleted := false
+
 	for {
 		select {
 		case <-c.Done():
@@ -198,9 +201,9 @@ func (h *Handlers) waitForAIResponse(c context.Context, sessionID, prompt string
 			if result.err != nil {
 				return assistantMsg, result.err
 			}
-			// 等待最后的消息更新
-			time.Sleep(messageWaitDelay)
-			return assistantMsg, nil
+			// Run() 已完成,但不立即返回,继续等待消息完成
+			runCompleted = true
+			slog.Debug("AI Run completed, waiting for message finish", "session_id", sessionID)
 
 		case event := <-messageEvents:
 			msg := event.Payload
@@ -208,9 +211,16 @@ func (h *Handlers) waitForAIResponse(c context.Context, sessionID, prompt string
 				assistantMsg = msg
 				// 检查消息是否完成
 				if msg.FinishPart() != nil {
-					// 消息已完成，等待可能的最后更新
+					// 消息已完成,等待可能的最后更新
 					time.Sleep(finishWaitDelay)
 					return assistantMsg, nil
+				}
+				// 如果 Run 已完成但消息还没有 finish part,继续等待
+				if runCompleted {
+					slog.Debug("Run completed but message not finished yet",
+						"session_id", sessionID,
+						"message_id", msg.ID,
+						"parts_count", len(msg.Parts))
 				}
 			}
 		}

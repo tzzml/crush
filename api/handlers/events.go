@@ -80,8 +80,6 @@ func (h *Handlers) HandleSSE(c context.Context, ctx *hertzapp.RequestContext) {
 	ctx.Response.Header.Set("Access-Control-Allow-Headers", "Cache-Control")
 	ctx.Response.Header.Set("Transfer-Encoding", "chunked")
 
-	slog.Info("SSE connection established", "remote_addr", remoteAddr, "project", projectPath)
-
 	// 创建事件通道，只订阅指定项目的 app 实例事件
 	eventCh := h.createEventChannelForProject(c, appInstance)
 
@@ -133,9 +131,14 @@ func (h *Handlers) HandleSSE(c context.Context, ctx *hertzapp.RequestContext) {
 					return
 				}
 
-				// 处理并发送事件（带增量计算）
+				// 处理并发送事件(带增量计算)
 				if err := h.writeSSEEventWithDelta(pw, event, messageStates); err != nil {
-					slog.Error("Failed to write SSE event", "error", err, "remote_addr", remoteAddr)
+					// 管道关闭是客户端断开连接的正常情况
+					if strings.Contains(err.Error(), "closed pipe") {
+						slog.Info("Client disconnected during event write", "remote_addr", remoteAddr)
+					} else {
+						slog.Error("Failed to write SSE event", "error", err, "remote_addr", remoteAddr)
+					}
 					return
 				}
 			}
